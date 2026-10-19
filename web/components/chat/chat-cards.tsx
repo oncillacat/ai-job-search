@@ -686,7 +686,11 @@ Best regards,
 ${name}`;
   return (
     <div>
-      <p>Two weeks without news is normal, and a short, polite follow-up is completely fine. Here&apos;s a draft:</p>
+      <p>
+        {(data.daysSinceApplied[job.id] ?? 14) >= 14
+          ? "Two weeks without news is normal, and a short, polite follow-up is completely fine. Here's a draft:"
+          : `It's been ${data.daysSinceApplied[job.id]} days, so there's no rush. Here's a draft to keep for when it's been about two weeks:`}
+      </p>
       <pre className="mt-3 whitespace-pre-wrap border border-line bg-surface p-4 font-sans text-[14px]">{email}</pre>
       <div className="mt-3 flex flex-wrap gap-2">
         <CopyButton text={email} label="Copy email" />

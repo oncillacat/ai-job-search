@@ -20,6 +20,7 @@ import {
   UploadCard,
 } from "./chat-cards";
 import type { ChatData } from "./chat-types";
+import { RichText } from "./rich-text";
 import type { ChatEvent } from "@/app/api/chat/route";
 
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
@@ -514,7 +515,11 @@ export function ChatDemo({ data }: { data: ChatData }) {
               </span>
               <div className="min-w-0 flex-1 border border-line bg-surface px-4 py-3.5 sm:px-5">
                 <span className="sr-only">Claude: </span>
-                {item.text && <p className={item.card ? "mb-3" : ""}>{item.text}</p>}
+                {item.text && (
+                  <div className={item.card ? "mb-3" : ""}>
+                    <RichText text={item.text} />
+                  </div>
+                )}
                 {item.card && renderCard(item)}
               </div>
             </li>
