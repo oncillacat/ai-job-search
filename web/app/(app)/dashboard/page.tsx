@@ -17,6 +17,7 @@ import {
   LiveTodayNote,
   LiveTodayTitle,
   LiveUpdated,
+  OwnSaved,
   SampleOnly,
 } from "@/components/live-dashboard";
 
@@ -142,11 +143,13 @@ export default async function JobBoardPage() {
           title="Applications"
           note="Fit scores are out of 100."
         >
-          <ApplicationsBoard
-            applications={applications}
-            jobs={jobs}
-            scores={scores}
-          />
+          <OwnSaved>
+            <ApplicationsBoard
+              applications={applications}
+              jobs={jobs}
+              scores={scores}
+            />
+          </OwnSaved>
         </Section>
 
         <Section

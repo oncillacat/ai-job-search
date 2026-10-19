@@ -5,7 +5,7 @@
 // arrives, these actions become Server Actions backed by the user_jobs,
 // profiles and preferences tables.
 
-import type { LiveSearch } from "@/lib/search/types";
+import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
 import { useSyncExternalStore } from "react";
 import { getDefaultPreferences, type Preferences, type Profile } from "@/lib/data";
 
@@ -71,6 +71,8 @@ export interface ChatThread {
   seenJobs: string[];
   /** Claude read this person's own CV: the demo's sample applications aren't theirs */
   ownCv?: boolean;
+  /** Real postings the person saved from a live search, newest first */
+  saved?: (ScoredPosting & { savedAt: string })[];
 }
 
 export interface ChatMessage {
@@ -244,6 +246,16 @@ export const demoActions = {
         ),
       },
     }));
+  },
+  savePosting(p: ScoredPosting) {
+    set((s) => {
+      const saved = s.chat.saved ?? [];
+      if (saved.some((x) => x.id === p.id)) return s;
+      return { ...s, chat: { ...s.chat, saved: [{ ...p, savedAt: new Date().toISOString() }, ...saved].slice(0, 200) } };
+    });
+  },
+  unsavePosting(id: string) {
+    set((s) => ({ ...s, chat: { ...s.chat, saved: (s.chat.saved ?? []).filter((x) => x.id !== id) } }));
   },
   chatRemove(itemId: string) {
     set((s) => ({ ...s, chat: { ...s.chat, items: s.chat.items.filter((i) => i.id !== itemId) } }));

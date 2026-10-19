@@ -406,6 +406,8 @@ const shortDate = (iso: string) =>
   iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : "—";
 
 export function LiveTable({ rows, onAsk }: { rows: ScoredPosting[]; onAsk?: (p: ScoredPosting) => void }) {
+  const { chat } = useDemoState();
+  const saved = new Set((chat.saved ?? []).map((x) => x.id));
   return (
     <div className="mt-3 overflow-x-auto border border-line bg-surface">
       <table className="w-full min-w-[900px] border-collapse text-[14px]">
@@ -451,11 +453,22 @@ export function LiveTable({ rows, onAsk }: { rows: ScoredPosting[]; onAsk?: (p: 
                 )}
               </td>
               <td className="whitespace-nowrap px-3 py-2.5">
-                {onAsk && (
-                  <button type="button" className={btnQuiet} onClick={() => onAsk(r)}>
-                    Ask
-                  </button>
-                )}
+                <span className="flex gap-1">
+                  {onAsk && (
+                    <button type="button" className={btnQuiet} onClick={() => onAsk(r)}>
+                      Ask
+                    </button>
+                  )}
+                  {saved.has(r.id) ? (
+                    <button type="button" className={btnGhost} onClick={() => demoActions.unsavePosting(r.id)}>
+                      Saved ✓
+                    </button>
+                  ) : (
+                    <button type="button" className={btnGhost} onClick={() => demoActions.savePosting(r)}>
+                      Save
+                    </button>
+                  )}
+                </span>
               </td>
             </tr>
           ))}
