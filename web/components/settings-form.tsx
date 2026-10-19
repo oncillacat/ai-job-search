@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { demoActions, useDemoState } from "@/lib/state/demo-store";
 import type { Preferences } from "@/lib/data";
+import { deleteAllFiles } from "@/lib/state/local-files";
 import { Button, Card } from "./ui";
+import { YourFiles } from "./your-files";
 
 function Toggle({
   label,
@@ -121,6 +123,15 @@ export function SettingsForm() {
         )}
       </Card>
 
+      <Card className="space-y-4">
+        <h2 className="font-display text-xl">Your files</h2>
+        <p className="text-muted">
+          Kept in this browser&apos;s private storage on your computer, not on a server. Other sites can&apos;t see
+          them, and clearing this site&apos;s data removes them.
+        </p>
+        <YourFiles />
+      </Card>
+
       <Card className="space-y-3">
         <h2 className="font-display text-xl">Your data</h2>
         <p className="text-muted">
@@ -131,6 +142,7 @@ export function SettingsForm() {
             variant="quiet"
             onClick={() => {
               demoActions.reset();
+              void deleteAllFiles();
               setCleared(true);
             }}
           >

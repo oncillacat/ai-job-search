@@ -19,6 +19,7 @@ import {
   SearchCard,
   UploadCard,
 } from "./chat-cards";
+import { deleteAllFiles, saveFile } from "@/lib/state/local-files";
 import type { ChatData } from "./chat-types";
 import { RichText } from "./rich-text";
 import type { ChatEvent } from "@/app/api/chat/route";
@@ -360,6 +361,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
       const out = (await res.json()) as { profile?: ExtractedProfile; message?: string };
       if (!res.ok || !out.profile) return reopen(out.message ?? "I couldn't read that CV.");
       const p = out.profile;
+      void saveFile("profile.json", JSON.stringify(p, null, 2));
       const split = (v: string) => v.split(/,|;| and /).map((x) => x.trim()).filter(Boolean);
       demoActions.setProfile({
         name: p.name,
@@ -481,12 +483,14 @@ export function ChatDemo({ data }: { data: ChatData }) {
           <UploadCard
             card={c}
             live={!!live?.on}
-            onDone={(files, cvFile) => {
+            onDone={(files, uploads) => {
               demoActions.chatUpdateCard(item.id, { files, done: true });
               const added = Object.entries(files).filter(([, v]) => v !== "skipped");
               you(`Uploaded ${added.map(([k]) => k).join(", ")}`);
               demoActions.markCvUploaded();
-              if (live?.on && cvFile) void readCv(item.id, cvFile);
+              // Keep the originals in this browser's private storage.
+              Object.values(uploads).forEach((f) => void saveFile(`uploads/${f.name}`, f));
+              if (live?.on && uploads.CV) void readCv(item.id, uploads.CV);
               else card({ type: "guesses" });
             }}
           />
@@ -579,6 +583,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
             onClick={() => {
               demoActions.chatRestart();
               demoActions.clearProfile();
+              void deleteAllFiles();
               Object.keys(decisions).forEach((id) => demoActions.undo(id));
               card({ type: "intro" });
             }}

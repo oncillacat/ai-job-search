@@ -19,10 +19,18 @@ export default function PrivacyPage() {
               Anthropic&apos;s Claude API to write the answer. This site&apos;s server passes them through and keeps
               nothing.
             </li>
-            <li>A CV you choose is never uploaded; the preview only reads its file name.</li>
             <li>
-              Your choices (saved and skipped jobs, settings) are kept in this browser&apos;s local
-              storage. Clearing site data removes them.
+              Your CV and other files, the profile Claude reads from your CV, and the drafts written for you
+              (form answers, follow-up emails) are kept in this browser&apos;s private storage on your computer.
+              You can download or delete them any time in Settings.
+            </li>
+            <li>
+              When Claude is connected, your CV is sent once to Anthropic&apos;s Claude API to be read. This
+              site&apos;s server passes it through and keeps no copy.
+            </li>
+            <li>
+              Your choices (saved and skipped jobs, settings) are kept in this browser&apos;s local storage.
+              Clearing site data, or &ldquo;Restart the demo&rdquo; in the chat, removes everything.
             </li>
           </ul>
         </section>

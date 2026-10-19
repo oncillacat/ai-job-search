@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { draftApplicationAnswer } from "@/lib/application-answer";
 import { demoActions, useDemoState, type ChatCard } from "@/lib/state/demo-store";
+import { saveFile } from "@/lib/state/local-files";
 import type { BoardPosting, Profile } from "@/lib/data";
 import type { ChatData } from "./chat-types";
 
@@ -94,10 +95,10 @@ export function UploadCard({
   card: Extract<ChatCard, { type: "upload" }>;
   /** True when Claude is connected and will actually read the CV */
   live: boolean;
-  onDone: (files: Record<string, string | "skipped">, cvFile?: File) => void;
+  onDone: (files: Record<string, string | "skipped">, uploads: Record<string, File>) => void;
 }) {
   const [files, setFiles] = useState<Record<string, string | "skipped">>(card.files ?? {});
-  const [cvFile, setCvFile] = useState<File | undefined>(undefined);
+  const [uploads, setUploads] = useState<Record<string, File>>({});
   const done = !!card.done;
 
   function renderRow(name: string, required = false) {
@@ -126,7 +127,7 @@ export function UploadCard({
                 const f = e.target.files?.[0];
                 if (!f) return;
                 setFiles((s) => ({ ...s, [name]: f.name }));
-                if (name === "CV") setCvFile(f);
+                setUploads((s) => ({ ...s, [name]: f }));
               }}
             />
             {required ? (
@@ -135,7 +136,11 @@ export function UploadCard({
                   type="button"
                   className={btnGhost}
                   onClick={() => {
-                    setCvFile(undefined);
+                    setUploads((s) => {
+                      const rest = { ...s };
+                      delete rest.CV;
+                      return rest;
+                    });
                     setFiles((s) => ({ ...s, [name]: "sample-cv.pdf" }));
                   }}
                 >
@@ -162,8 +167,8 @@ export function UploadCard({
         First, your profile. I only need your <strong>CV</strong>. Add anything else you&apos;d like me to know, or skip
         it.{" "}
         {live
-          ? "I'll send your CV (PDF) to Claude to read it. The file isn't saved anywhere, and what I learn stays in this browser."
-          : "In this demo, files stay in your browser."}
+          ? "I'll send your CV (PDF) to Claude to read it. Your files and what I learn are kept in this browser's private storage, not on a server."
+          : "Your files are kept in this browser's private storage, not on a server."}
       </p>
       <ul className="mt-3 border border-line bg-surface px-4">
         {renderRow("CV", true)}
@@ -179,7 +184,7 @@ export function UploadCard({
             optionalDocs.forEach((d) => {
               if (!all[d]) all[d] = "skipped";
             });
-            onDone(all, cvFile);
+            onDone(all, uploads);
           }}
         >
           Continue
@@ -518,11 +523,20 @@ export function ApplyCard({
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  if (!job) return null;
   const profile = stored ?? data.profile;
-  const blocked = evaluation?.eligibility.status === "fail";
   const ready = step >= applySteps.length;
-  const questions = data.questions[job.id] ?? [];
+  const questions = job ? (data.questions[job.id] ?? []) : [];
+  const answersText = job
+    ? questions.map((q) => `${q}\n${draftApplicationAnswer(q, profile, job, evaluation).answer}`).join("\n\n")
+    : "";
+
+  // Keep a copy of the prepared answers in the browser's private storage.
+  useEffect(() => {
+    if (ready && job && answersText) void saveFile(`generated/${job.id}/form-answers.txt`, answersText);
+  }, [ready, job, answersText]);
+
+  if (!job) return null;
+  const blocked = evaluation?.eligibility.status === "fail";
 
   return (
     <div>
@@ -718,10 +732,10 @@ export function FollowUpEmailCard({
   const { profile: stored } = useDemoState();
   const job = data.jobs.find((j) => j.id === card.jobId);
   const app = data.applications.find((a) => a.jobId === card.jobId);
-  if (!job) return null;
   const name = (stored ?? data.profile).name;
   const contact = app?.contact?.split(",")[0];
-  const email = `Subject: Following up on my application for ${job.title}
+  const email = job
+    ? `Subject: Following up on my application for ${job.title}
 
 Dear ${contact ?? "Hiring Team"},
 
@@ -730,13 +744,22 @@ I applied for the ${job.title} position${app?.appliedOn ? ` on ${app.appliedOn}`
 If it would help, I'm happy to share anything else about my experience. Thank you for your time.
 
 Best regards,
-${name}`;
+${name}`
+    : "";
+
+  // Keep a copy of the draft in the browser's private storage.
+  useEffect(() => {
+    if (job && email) void saveFile(`generated/${job.id}/follow-up-email.txt`, email);
+  }, [job, email]);
+
+  if (!job) return null;
+  const days = data.daysSinceApplied[job.id];
   return (
     <div>
       <p>
-        {(data.daysSinceApplied[job.id] ?? 14) >= 14
+        {(days ?? 14) >= 14
           ? "Two weeks without news is normal, and a short, polite follow-up is completely fine. Here's a draft:"
-          : `It's been ${data.daysSinceApplied[job.id]} days, so there's no rush. Here's a draft to keep for when it's been about two weeks:`}
+          : `It's been ${days} days, so there's no rush. Here's a draft to keep for when it's been about two weeks:`}
       </p>
       <pre className="mt-3 whitespace-pre-wrap border border-line bg-surface p-4 font-sans text-[14px]">{email}</pre>
       <div className="mt-3 flex flex-wrap gap-2">
