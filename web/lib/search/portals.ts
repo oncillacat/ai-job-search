@@ -1,30 +1,9 @@
 // Live job portals for the local search. Job Bank and LinkedIn are ported from the repo's
 // .agents/skills/{jobbankca,linkedin}-search CLIs (regex parsing of public HTML pages);
 // Adzuna and Jooble use their official APIs and only run when their keys are set.
-// Server-only: called from app/api/chat/route.ts.
+// Server-only: called from lib/search/run.ts.
 
-export interface Posting {
-  /** Stable across searches, prefixed by portal: jb-, li-, az-, jo- */
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  portal: string;
-  /** Where the posting came from, when the portal imported it (e.g. "indeed.com") */
-  via?: string;
-  /** YYYY-MM-DD, or "" when unknown */
-  posted: string;
-  url: string;
-  salary?: string;
-  /** Short description from the portal; untrusted text */
-  snippet?: string;
-}
-
-export interface PortalResult {
-  name: string;
-  status: "ok" | "failed" | "not_connected";
-  postings: Posting[];
-}
+import type { PortalResult, Posting } from "./types";
 
 export interface PortalQuery {
   roles: string[];

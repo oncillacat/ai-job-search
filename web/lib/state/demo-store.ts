@@ -5,6 +5,7 @@
 // arrives, these actions become Server Actions backed by the user_jobs,
 // profiles and preferences tables.
 
+import type { LiveSearch } from "@/lib/search/types";
 import { useSyncExternalStore } from "react";
 import { getDefaultPreferences, type Preferences, type Profile } from "@/lib/data";
 
@@ -32,7 +33,14 @@ export type ChatCard =
       reasons?: { roles: string; cities: string; salary: string };
     }
   | { type: "blocker"; done?: boolean }
-  | { type: "search"; round: number; encourage?: { searched: number; applied: number }; byClaude?: boolean }
+  | {
+      type: "search";
+      round: number;
+      encourage?: { searched: number; applied: number };
+      byClaude?: boolean;
+      /** Real results from the live search (local only); absent for the sample rounds */
+      live?: LiveSearch;
+    }
   | { type: "picker"; purpose: "apply" | "ask" | "interview" | "followup"; done?: string }
   | { type: "apply"; jobId: string; submitted?: boolean }
   | { type: "answer"; jobId: string; question: string }
@@ -59,6 +67,8 @@ export interface ChatThread {
   searches: string[];
   /** Applications Claude has already checked in about */
   checkedIn: string[];
+  /** Live posting ids already shown, so repeat searches return only new jobs */
+  seenJobs: string[];
 }
 
 export interface ChatMessage {
@@ -93,7 +103,7 @@ const initialState: DemoState = {
   readyMarked: {},
   seen: {},
   assistant: { messages: [], attached: [] },
-  chat: { items: [], focusJob: null, blockerPref: "prepare", searches: [], checkedIn: [] },
+  chat: { items: [], focusJob: null, blockerPref: "prepare", searches: [], checkedIn: [], seenJobs: [] },
 };
 
 let state: DemoState | null = null;
@@ -220,6 +230,9 @@ export const demoActions = {
         ),
       },
     }));
+  },
+  chatRemove(itemId: string) {
+    set((s) => ({ ...s, chat: { ...s.chat, items: s.chat.items.filter((i) => i.id !== itemId) } }));
   },
   chatSet(patch: Partial<ChatThread>) {
     set((s) => ({ ...s, chat: { ...s.chat, ...patch } }));

@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { searchAdzuna, searchJobBank, searchJooble, searchLinkedIn, type PortalResult, type Posting } from "./portals";
+import { searchAdzuna, searchJobBank, searchJooble, searchLinkedIn } from "./portals";
+import type { LiveSearch, Posting, ScoredPosting } from "./types";
 
 // One live search: every portal in parallel → drop duplicates and jobs already seen →
 // a keyword pre-filter picks the most relevant few → Claude rates those against the profile.
@@ -9,30 +10,6 @@ import { searchAdzuna, searchJobBank, searchJooble, searchLinkedIn, type PortalR
 
 const MODEL = "claude-opus-5-5";
 const CLOSE_LOOK = 15;
-
-export interface ScoredPosting extends Posting {
-  fit: "high" | "medium" | "low";
-  score: number;
-  /** One sentence to the person about why */
-  reason: string;
-  gaps: string[];
-}
-
-export interface LiveSearch {
-  at: string;
-  query: { roles: string[]; cities: string[] };
-  sources: { name: string; count: number; status: PortalResult["status"] }[];
-  /** New postings after removing duplicates and ones already seen */
-  searched: number;
-  /** How many Claude read closely */
-  closeLook: number;
-  tiers: { high: number; medium: number; low: number };
-  notice: string | null;
-  high: ScoredPosting[];
-  medium: ScoredPosting[];
-  /** Every posting id from this search, so later searches skip them */
-  seenIds: string[];
-}
 
 export interface SearchProfile {
   headline?: string;

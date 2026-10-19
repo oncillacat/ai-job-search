@@ -6,6 +6,7 @@ import { draftApplicationAnswer } from "@/lib/application-answer";
 import { demoActions, useDemoState, type ChatCard } from "@/lib/state/demo-store";
 import { saveFile } from "@/lib/state/local-files";
 import type { BoardPosting, Profile } from "@/lib/data";
+import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
 import type { ChatData } from "./chat-types";
 
 // ---------- shared bits ----------
@@ -401,17 +402,114 @@ function JobTable({
   );
 }
 
+const shortDate = (iso: string) =>
+  iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : "—";
+
+function LiveTable({ rows, onAsk }: { rows: ScoredPosting[]; onAsk?: (p: ScoredPosting) => void }) {
+  return (
+    <div className="mt-3 overflow-x-auto border border-line bg-surface">
+      <table className="w-full min-w-[900px] border-collapse text-[14px]">
+        <thead>
+          <tr className="text-left text-[12px] tracking-wide text-muted">
+            {["Title", "Company", "Location", "Portal", "Posted", "Fit", "Link", ""].map((h) => (
+              <th key={h} className="px-3 py-2 font-medium">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className="border-t border-line align-top">
+              <td className="min-w-[220px] px-3 py-2.5 font-medium">
+                {r.title}
+                <span className="mt-0.5 block text-[13px] font-normal text-muted">{r.reason}</span>
+                {r.gaps.length > 0 && (
+                  <span className="mt-0.5 block text-[13px] font-normal text-clay">To check: {r.gaps.join("; ")}</span>
+                )}
+              </td>
+              <td className="px-3 py-2.5">{r.company || "—"}</td>
+              <td className="px-3 py-2.5 text-muted">{r.location || "—"}</td>
+              <td className="px-3 py-2.5 text-muted">
+                {r.portal}
+                {r.via && <span className="block text-[12px]">via {r.via}</span>}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-muted">{shortDate(r.posted)}</td>
+              <td className="whitespace-nowrap px-3 py-2.5">
+                <span className={r.fit === "high" ? "font-medium text-sage" : "text-mist-ink"}>
+                  {r.fit === "high" ? "High" : "Medium"}
+                </span>
+                {r.score > 0 && <span className="ml-1 tabular-nums text-muted">{r.score}</span>}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2.5">
+                {/^https:\/\//.test(r.url) ? (
+                  <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-sage hover:underline">
+                    Posting ↗
+                  </a>
+                ) : (
+                  <span className="text-muted">—</span>
+                )}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2.5">
+                {onAsk && (
+                  <button type="button" className={btnQuiet} onClick={() => onAsk(r)}>
+                    Ask
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Real results from the live search. Claude writes the headline around it. */
+function LiveResults({ live, onAsk }: { live: LiveSearch; onAsk?: (p: ScoredPosting) => void }) {
+  const portals = live.sources.filter((s) => s.status === "ok");
+  const rows = live.high.length ? live.high : live.medium.slice(0, 10);
+  const moreMedium = live.high.length ? live.medium : live.medium.slice(10);
+  return (
+    <div>
+      <p className="text-[14px] text-muted">
+        Searched {portals.map((s) => `${s.name} (${s.count})`).join(", ") || "no portals"} for{" "}
+        {live.query.roles.join(" / ")}
+        {live.query.cities.length ? ` in ${live.query.cities.join(" / ")}` : ""} · <strong className="text-ink">{live.searched}</strong>{" "}
+        new postings · {live.closeLook} read closely · {live.tiers.high} high · {live.tiers.medium} medium · {live.tiers.low} low
+      </p>
+      {live.notice && <p className="mt-2 border-l-2 border-sand-ink/40 pl-3 text-[14px] text-sand-ink">{live.notice}</p>}
+      {rows.length > 0 && <LiveTable rows={rows} onAsk={onAsk} />}
+      {moreMedium.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-[14px] text-sage">
+            {live.high.length ? `Show the ${moreMedium.length} medium matches` : `Show ${moreMedium.length} more medium matches`}
+          </summary>
+          <LiveTable rows={moreMedium} onAsk={onAsk} />
+        </details>
+      )}
+      <p className="mt-3 text-[14px] text-muted">
+        Fit is judged from each listing&apos;s title, employer, location and short description. Open a posting to check
+        the full requirements. Low matches aren&apos;t shown.
+      </p>
+    </div>
+  );
+}
+
 export function SearchCard({
   card,
   data,
   onApply,
   onAsk,
+  onAskLive,
 }: {
   card: Extract<ChatCard, { type: "search" }>;
   data: ChatData;
   onApply: (jobId: string) => void;
   onAsk: (jobId: string) => void;
+  onAskLive?: (p: ScoredPosting) => void;
 }) {
+  if (card.live) return <LiveResults live={card.live} onAsk={onAskLive} />;
   const round = data.rounds[Math.min(card.round, data.rounds.length - 1)];
   const searched = round.sources.reduce((n, s) => n + s.count, 0);
   const portals = round.sources.filter((s) => s.count > 0);

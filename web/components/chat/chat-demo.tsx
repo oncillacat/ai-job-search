@@ -24,6 +24,7 @@ import type { ChatData } from "./chat-types";
 import { RichText } from "./rich-text";
 import type { ChatEvent } from "@/app/api/chat/route";
 import type { ExtractedProfile } from "@/app/api/profile/route";
+import type { LiveSearch } from "@/lib/search/types";
 
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
 // routing in `route()` once sign-in exists; the cards stay the same.
@@ -101,9 +102,12 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const s = getDemoState();
     const now = Date.now();
     const recent = s.chat.searches.filter((t) => now - Date.parse(t) < 7 * 864e5).length;
-    const searched = data.rounds
-      .slice(0, Math.min(recent, data.rounds.length))
-      .reduce((n, r) => n + r.sources.reduce((m, src) => m + src.count, 0), 0);
+    const liveCards = s.chat.items.flatMap((i) => (i.card?.type === "search" && i.card.live ? [i.card.live] : []));
+    const searched = liveCards.length
+      ? liveCards.filter((l) => now - Date.parse(l.at) < 7 * 864e5).reduce((n, l) => n + l.searched, 0)
+      : data.rounds
+          .slice(0, Math.min(recent, data.rounds.length))
+          .reduce((n, r) => n + r.sources.reduce((m, src) => m + src.count, 0), 0);
     const applied = data.jobs.filter((j) => {
       const st = statusOf(j.id);
       if (!st || st === "saved" || st === "let-go") return false;
@@ -113,7 +117,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     return { searched, applied };
   }
 
-  function runSearch(echo = true, byClaude = false) {
+  function runSearch(echo = true, byClaude = false, live?: LiveSearch) {
     const s = getDemoState();
     const now = new Date();
     const round = s.chat.searches.length;
@@ -133,10 +137,15 @@ export function ChatDemo({ data }: { data: ChatData }) {
       }).length;
       encourage = { searched, applied };
     }
-    demoActions.chatSet({ searches, focusJob: null });
+    demoActions.chatSet({
+      searches,
+      focusJob: null,
+      seenJobs: live ? [...s.chat.seenJobs, ...live.seenIds].slice(-3000) : s.chat.seenJobs,
+    });
     if (echo) you("Do a new search");
-    card({ type: "search", round, encourage, byClaude });
-    if (round === 0) raiseCheckIns();
+    card({ type: "search", round, encourage, byClaude, live });
+    // Check-ins are about the sample applications, so they belong with the sample search only.
+    if (round === 0 && !live) raiseCheckIns();
   }
 
   function startApply(jobId: string) {
@@ -221,7 +230,14 @@ export function ChatDemo({ data }: { data: ChatData }) {
           ? `[Preferences confirmed: roles ${c.roles ?? "?"}; where ${c.cities ?? "?"}; salary ${c.salary || "not set"}]`
           : "",
       blocker: "[Blocker preference answered]",
-      search: c.type === "search" ? `[Showed search results, run ${c.round + 1}]` : "",
+      search:
+        c.type === "search"
+          ? c.live
+            ? `[Showed live search results: ${c.live.searched} new postings; ${[...c.live.high, ...c.live.medium.slice(0, 10)]
+                .map((x) => `${x.title} at ${x.company}, ${x.location} (${x.portal}, ${x.fit} ${x.score}, ${x.url})`)
+                .join("; ") || "no strong or medium matches"}]`
+            : `[Showed search results, run ${c.round + 1}]`
+          : "",
       picker: c.type === "picker" ? `[Asked which job, for: ${c.purpose}]` : "",
       apply: c.type === "apply" ? `[Showed the application package${job}${c.submitted ? "; marked submitted" : ""}]` : "",
       answer: `[Answered a question${job}]`,
@@ -252,6 +268,24 @@ export function ChatDemo({ data }: { data: ChatData }) {
     return msgs.slice(-40);
   }
 
+  /** The roles and cities the person confirmed on the guesses card, if any. */
+  function confirmedPrefs() {
+    const g = [...getDemoState().chat.items].reverse().find((i) => i.card?.type === "guesses" && i.card.done)?.card;
+    const split = (v?: string) =>
+      (v ?? "")
+        .split(/,|;|\/|\bor\b|\band\b/)
+        .map((x) => x.trim())
+        .filter(Boolean)
+        // "Toronto, ON": keep a province code or name with the city before it.
+        .reduce<string[]>((out, x) => {
+          if (out.length && /^([A-Z]{2}|Ontario|Quebec|Québec|British Columbia|Alberta|Manitoba|Nova Scotia|Saskatchewan|Canada)$/.test(x))
+            out[out.length - 1] += `, ${x}`;
+          else out.push(x);
+          return out;
+        }, []);
+    return g?.type === "guesses" ? { roles: split(g.roles), cities: split(g.cities) } : undefined;
+  }
+
   /** Sends a message to Claude. `show: false` sends it without adding a chat bubble (e.g. the first search). */
   async function askClaude(q: string, show = true) {
     const s = getDemoState();
@@ -260,6 +294,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     setBusy(true);
     const statuses = Object.fromEntries(data.jobs.map((j) => [j.id, statusOf(j.id)]));
     let current: string | null = null;
+    let progress: string | null = null;
     let text = "";
     try {
       const res = await fetch("/api/chat", {
@@ -277,6 +312,8 @@ export function ChatDemo({ data }: { data: ChatData }) {
             weekApplied: weekNumbers().applied,
             blockerPref: s.chat.blockerPref,
             focusJob: s.chat.focusJob,
+            seen: s.chat.seenJobs,
+            prefs: confirmedPrefs(),
           },
         }),
       });
@@ -301,9 +338,15 @@ export function ChatDemo({ data }: { data: ChatData }) {
             text += e.v;
             if (!current) current = demoActions.chatAdd({ from: "claude", text })[0];
             else demoActions.chatSetText(current, text);
+          } else if (e.t === "progress") {
+            current = null;
+            text = "";
+            progress = demoActions.chatAdd({ from: "claude", text: e.v })[0];
           } else if (e.t === "tool") {
             current = null;
             text = "";
+            if (progress) demoActions.chatRemove(progress);
+            progress = null;
             handleTool(e);
           } else if (e.t === "error") {
             say(e.v);
@@ -322,7 +365,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     if (id) demoActions.chatSet({ focusJob: id });
     switch (e.name) {
       case "search_jobs":
-        return runSearch(false, true);
+        return runSearch(false, true, e.search);
       case "prepare_application":
         return id && card({ type: "apply", jobId: id });
       case "check_in":
@@ -525,7 +568,19 @@ export function ChatDemo({ data }: { data: ChatData }) {
           />
         );
       case "search":
-        return <SearchCard card={c} data={data} onApply={startApply} onAsk={startAsk} />;
+        return (
+          <SearchCard
+            card={c}
+            data={data}
+            onApply={startApply}
+            onAsk={startAsk}
+            onAskLive={
+              live?.on
+                ? (p) => !busy && void askClaude(`Tell me more about ${p.title} at ${p.company || "this employer"}. Is it a good fit for me?`)
+                : undefined
+            }
+          />
+        );
       case "picker":
         return (
           <PickerCard card={c} data={data} jobIds={pickerJobs[c.purpose]()} onPick={(id) => pick(item.id, c.purpose, id)} />
