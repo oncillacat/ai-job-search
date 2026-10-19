@@ -22,6 +22,7 @@ import {
 import type { ChatData } from "./chat-types";
 import { RichText } from "./rich-text";
 import type { ChatEvent } from "@/app/api/chat/route";
+import type { ExtractedProfile } from "@/app/api/profile/route";
 
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
 // routing in `route()` once sign-in exists; the cards stay the same.
@@ -335,6 +336,60 @@ export function ChatDemo({ data }: { data: ChatData }) {
     }
   }
 
+  /** Sends the uploaded CV to Claude, saves the profile it reads, and shows guesses from the CV. */
+  async function readCv(uploadItemId: string, file: File) {
+    const reopen = (message: string) => {
+      say(`${message} You can upload another PDF or use the sample CV.`);
+      demoActions.chatUpdateCard(uploadItemId, { done: false });
+    };
+    if (file.type !== "application/pdf") return reopen("I can read PDFs here, and that file isn't one.");
+    const progress = demoActions.chatAdd({ from: "claude", text: "Reading your CV now. This usually takes under a minute." })[0];
+    setBusy(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(file);
+      });
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaType: file.type, data: dataUrl.slice(dataUrl.indexOf(",") + 1) }),
+      });
+      const out = (await res.json()) as { profile?: ExtractedProfile; message?: string };
+      if (!res.ok || !out.profile) return reopen(out.message ?? "I couldn't read that CV.");
+      const p = out.profile;
+      const split = (v: string) => v.split(/,|;| and /).map((x) => x.trim()).filter(Boolean);
+      demoActions.setProfile({
+        name: p.name,
+        headline: p.headline,
+        email: p.email,
+        location: p.location,
+        workAuthorization: p.workAuthorization,
+        languages: p.languages,
+        targetRoles: split(p.guesses.roles.value),
+        targetCities: split(p.guesses.cities.value),
+        summary: p.summary,
+        experience: p.experience.map((e, i) => ({ ...e, id: `exp-${i}` })),
+        education: p.education.map((e, i) => ({ ...e, id: `edu-${i}` })),
+        skills: p.skills,
+      });
+      demoActions.chatSetText(progress, `Done. I read your CV${p.name ? `, ${p.name.split(" ")[0]}` : ""}.`);
+      card({
+        type: "guesses",
+        roles: p.guesses.roles.value,
+        cities: p.guesses.cities.value,
+        salary: p.guesses.salary.value,
+        reasons: { roles: p.guesses.roles.reason, cities: p.guesses.cities.reason, salary: p.guesses.salary.reason },
+      });
+    } catch {
+      reopen("Something went wrong while reading your CV.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // ---------- free text (scripted routing when Claude isn't connected) ----------
 
   function findJob(text: string) {
@@ -425,12 +480,14 @@ export function ChatDemo({ data }: { data: ChatData }) {
         return (
           <UploadCard
             card={c}
-            onDone={(files) => {
+            live={!!live?.on}
+            onDone={(files, cvFile) => {
               demoActions.chatUpdateCard(item.id, { files, done: true });
               const added = Object.entries(files).filter(([, v]) => v !== "skipped");
               you(`Uploaded ${added.map(([k]) => k).join(", ")}`);
               demoActions.markCvUploaded();
-              card({ type: "guesses" });
+              if (live?.on && cvFile) void readCv(item.id, cvFile);
+              else card({ type: "guesses" });
             }}
           />
         );
@@ -521,6 +578,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
             className={btnQuiet}
             onClick={() => {
               demoActions.chatRestart();
+              demoActions.clearProfile();
               Object.keys(decisions).forEach((id) => demoActions.undo(id));
               card({ type: "intro" });
             }}

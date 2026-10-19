@@ -88,12 +88,16 @@ const optionalDocs = ["Transcript", "Graduation certificate", "Awards", "LinkedI
 
 export function UploadCard({
   card,
+  live,
   onDone,
 }: {
   card: Extract<ChatCard, { type: "upload" }>;
-  onDone: (files: Record<string, string | "skipped">) => void;
+  /** True when Claude is connected and will actually read the CV */
+  live: boolean;
+  onDone: (files: Record<string, string | "skipped">, cvFile?: File) => void;
 }) {
   const [files, setFiles] = useState<Record<string, string | "skipped">>(card.files ?? {});
+  const [cvFile, setCvFile] = useState<File | undefined>(undefined);
   const done = !!card.done;
 
   function renderRow(name: string, required = false) {
@@ -120,12 +124,21 @@ export function UploadCard({
               accept=".pdf,.doc,.docx,.png,.jpg"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) setFiles((s) => ({ ...s, [name]: f.name }));
+                if (!f) return;
+                setFiles((s) => ({ ...s, [name]: f.name }));
+                if (name === "CV") setCvFile(f);
               }}
             />
             {required ? (
               !value && (
-                <button type="button" className={btnGhost} onClick={() => setFiles((s) => ({ ...s, [name]: "sample-cv.pdf" }))}>
+                <button
+                  type="button"
+                  className={btnGhost}
+                  onClick={() => {
+                    setCvFile(undefined);
+                    setFiles((s) => ({ ...s, [name]: "sample-cv.pdf" }));
+                  }}
+                >
                   Use a sample CV
                 </button>
               )
@@ -147,7 +160,10 @@ export function UploadCard({
     <div>
       <p>
         First, your profile. I only need your <strong>CV</strong>. Add anything else you&apos;d like me to know, or skip
-        it. In this demo, files stay in your browser.
+        it.{" "}
+        {live
+          ? "I'll send your CV (PDF) to Claude to read it. The file isn't saved anywhere, and what I learn stays in this browser."
+          : "In this demo, files stay in your browser."}
       </p>
       <ul className="mt-3 border border-line bg-surface px-4">
         {renderRow("CV", true)}
@@ -163,7 +179,7 @@ export function UploadCard({
             optionalDocs.forEach((d) => {
               if (!all[d]) all[d] = "skipped";
             });
-            onDone(all);
+            onDone(all, cvFile);
           }}
         >
           Continue
@@ -203,7 +219,14 @@ export function GuessesCard({
   profile: Profile;
   onDone: (v: { roles: string; cities: string; salary: string }) => void;
 }) {
-  const g = guessesFor(profile);
+  const fromCv = card.reasons
+    ? {
+        roles: { value: card.roles ?? "", reason: card.reasons.roles },
+        cities: { value: card.cities ?? "", reason: card.reasons.cities },
+        salary: { value: card.salary ?? "", reason: card.reasons.salary },
+      }
+    : null;
+  const g = fromCv ?? guessesFor(profile);
   const [roles, setRoles] = useState(card.roles ?? g.roles.value);
   const [cities, setCities] = useState(card.cities ?? g.cities.value);
   const [salary, setSalary] = useState(card.salary ?? g.salary.value);
