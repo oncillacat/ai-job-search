@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui";
-import { AskButton } from "@/components/assistant-panel";
 import {
   getApplicationQuestions,
   getApplyUrl,
@@ -32,8 +31,8 @@ export default async function ApplyPage({ params }: PageProps<"/jobs/[id]/apply"
       </Link>
       <div className="mt-6">
         <PageHeader eyebrow="Step 2 of 2 · Your documents are ready" title={`Apply to ${job.company}`}>
-          Open the application in a new tab. For any question on the form, ask the assistant here and copy the
-          answer back.
+          Open the application in a new tab. For any question on the form, ask in the chat and copy the answer
+          back.
         </PageHeader>
       </div>
 
@@ -56,27 +55,18 @@ export default async function ApplyPage({ params }: PageProps<"/jobs/[id]/apply"
       <section className="rounded-3xl border border-line bg-surface p-5 sm:p-6">
         <h2 className="font-display text-xl">Questions on this form</h2>
         <p className="mt-1 text-muted">
-          Tap one to get a paste-ready answer from the assistant, or open it and paste any other question.
+          Tap one to ask it in the chat and get a paste-ready answer.
         </p>
         <div className="mt-4 flex flex-col gap-2">
           {getApplicationQuestions(job).map((q) => (
-            <AskButton
-              key={q}
-              jobId={job.id}
-              prompt={q}
-              send
-              className="rounded-2xl bg-mist-soft px-4 py-2.5 text-left text-[15px] text-ink transition-colors duration-300 hover:bg-mist"
-            >
+            <Link key={q} href={`/chat?ask=${job.id}`} className="rounded-2xl bg-mist-soft px-4 py-2.5 text-left text-[15px] text-ink transition-colors duration-300 hover:bg-mist">
               {q}
-            </AskButton>
+            </Link>
           ))}
         </div>
-        <AskButton
-          jobId={job.id}
-          className="mt-4 rounded-md bg-sage px-5 py-2.5 text-[15px] font-medium text-sage-ink hover:opacity-90"
-        >
-          Open the assistant
-        </AskButton>
+        <Link href={`/chat?ask=${job.id}`} className="inline-block mt-4 rounded-md bg-sage px-5 py-2.5 text-[15px] font-medium text-sage-ink hover:opacity-90">
+          Ask in the chat
+        </Link>
       </section>
 
       <p className="mt-6 text-[15px] text-muted">
@@ -85,8 +75,8 @@ export default async function ApplyPage({ params }: PageProps<"/jobs/[id]/apply"
           Back to your CV and letter
         </Link>
         . Once you&apos;ve submitted, the job moves to Applied on your{" "}
-        <Link href="/applications#applications" className="text-sage underline-offset-4 hover:underline">
-          job board
+        <Link href="/dashboard#applications" className="text-sage underline-offset-4 hover:underline">
+          dashboard
         </Link>
         .
       </p>

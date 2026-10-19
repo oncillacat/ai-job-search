@@ -13,10 +13,10 @@ export default function MarketingLayout({ children }: LayoutProps<"/">) {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Link
-              href="/start"
+              href="/chat"
               className="whitespace-nowrap rounded-md bg-surface px-4 py-1.5 text-[15px] font-medium text-ink shadow-sm transition-opacity duration-300 hover:opacity-90"
             >
-              Try the preview
+              Start chatting
             </Link>
           </div>
         </div>

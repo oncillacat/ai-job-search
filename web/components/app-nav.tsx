@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandMark } from "./brand-mark";
-import { openAssistant } from "@/lib/state/assistant-ui";
 import { ThemeToggle } from "./theme-toggle";
 
 const links = [
-  { href: "/digest", label: "Today" },
-  { href: "/applications", label: "Job board" },
+  { href: "/chat", label: "Chat" },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/profile", label: "Profile" },
   { href: "/settings", label: "Settings" },
 ] as const;
@@ -22,7 +21,7 @@ export function AppNav() {
         <nav aria-label="Main" className="order-3 -mx-1 flex w-full gap-1 overflow-x-auto [scrollbar-width:none] sm:order-2 sm:w-auto">
           {links.map((l) => {
             const active = pathname === l.href || pathname.startsWith(`${l.href}/`) ||
-              (l.href === "/digest" && pathname.startsWith("/jobs"));
+              (l.href === "/chat" && (pathname.startsWith("/jobs") || pathname === "/digest"));
             return (
               <Link
                 key={l.href}
@@ -38,13 +37,6 @@ export function AppNav() {
           })}
         </nav>
         <div className="order-2 flex items-center gap-1 sm:order-3">
-          <button
-            type="button"
-            onClick={() => openAssistant()}
-            className="rounded-md bg-surface px-3.5 py-1.5 text-[14px] font-medium text-ink shadow-sm transition-opacity duration-300 hover:opacity-90"
-          >
-            Ask
-          </button>
           <ThemeToggle />
         </div>
       </div>

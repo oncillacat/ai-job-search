@@ -7,6 +7,9 @@ const labels = {
   saved: { text: "Saved", tone: "mist" },
   applied: { text: "Applied", tone: "sage" },
   "let-go": { text: "Let go", tone: "plain" },
+  interview: { text: "Interview", tone: "sage" },
+  offer: { text: "Offer", tone: "sage" },
+  rejected: { text: "Closed", tone: "plain" },
 } as const;
 
 /** Small marker showing what the user decided about a job, if anything. */

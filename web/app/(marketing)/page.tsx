@@ -40,9 +40,9 @@ export default function Home() {
             you which few are worth your time, and helps you send a CV you can stop editing.
           </p>
           <div className="mt-10 flex flex-wrap gap-3">
-            <ButtonLink href="/start">Start with your CV</ButtonLink>
-            <ButtonLink href="/digest" variant="quiet" className="!bg-surface hover:!bg-surface/80">
-              See a sample morning
+            <ButtonLink href="/chat">Start chatting</ButtonLink>
+            <ButtonLink href="/dashboard" variant="quiet" className="!bg-surface hover:!bg-surface/80">
+              See the dashboard
             </ButtonLink>
           </div>
         </div>

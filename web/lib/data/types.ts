@@ -235,3 +235,14 @@ export interface Preferences {
   breathePause: boolean;
   followUpNudges: boolean;
 }
+
+/** One run of "Do a new search" in the chat demo. */
+export interface SearchRound {
+  date: string;
+  sources: DigestSource[];
+  tiers: MatchTiers;
+  /** Only errors that change the results, in plain words */
+  notice?: string;
+  high: BoardPosting[];
+  medium: BoardPosting[];
+}

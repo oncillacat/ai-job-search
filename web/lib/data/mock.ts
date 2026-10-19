@@ -8,6 +8,7 @@ import type {
   InterviewPrep,
   Job,
   JobBoard,
+  SearchRound,
   Preferences,
   Profile,
   TailoredDocuments,
@@ -722,3 +723,55 @@ export const jobBoard: JobBoard = {
     { kind: "Company notes", name: "Lakeshore Public Health Unit", forJob: "lakeshore-research-analyst" },
   ],
 };
+
+// Results for successive "Do a new search" runs in the chat demo. Each run only contains postings not shown before.
+export const searchRounds: SearchRound[] = [
+  {
+    date: "Monday, October 19",
+    sources: [
+      { name: "Job Bank Canada", count: 42 },
+      { name: "Adzuna", count: 21 },
+      { name: "Jooble", count: 9 },
+      { name: "LinkedIn (links you pasted)", count: 2 },
+    ],
+    tiers: { high: 2, medium: 14, low: 58 },
+    notice: "Jooble only partly answered today, so you may see a few fewer of its jobs than usual.",
+    high: jobBoard.today.postings.filter((t) => t.fit === "high"),
+    medium: jobBoard.today.postings.filter((t) => t.fit === "medium"),
+  },
+  {
+    date: "Monday, October 19",
+    sources: [
+      { name: "Job Bank Canada", count: 31 },
+      { name: "Adzuna", count: 17 },
+      { name: "Jooble", count: 6 },
+      { name: "LinkedIn (links you pasted)", count: 0 },
+    ],
+    tiers: { high: 0, medium: 10, low: 44 },
+    high: [],
+    medium: [
+      p("q1", "Data Analyst, Patient Access", "Lakeview Regional Health", "Barrie, ON", "Job Bank Canada", "Oct 18", "Oct 19", "medium", "Strong skills match; Barrie is outside your cities."),
+      p("q2", "Research Associate, Health Services", "Institute for Care Studies", "Toronto, ON", "Adzuna", "Oct 18", "Oct 19", "medium", "Good topic match; asks for SAS, which isn't in your CV."),
+      p("q3", "Reporting Analyst", "Greenway Home Care", "Mississauga, ON", "Job Bank Canada", "Oct 18", "Oct 19", "medium", "Reporting fits; home care rather than hospital data."),
+      p("q4", "Junior Epidemiologist", "Northern Shore Public Health", "Sudbury, ON", "Jooble", "Oct 17", "Oct 19", "medium", "Your MSc fits well; Sudbury is far from your cities."),
+      p("q5", "Data Coordinator, Clinical Trials", "Bayview Research Centre", "Toronto, ON", "Adzuna", "Oct 17", "Oct 19", "medium", "Coordination-heavy, lighter on analysis than you'd like."),
+      p("q6", "Health Information Analyst", "Credit Valley Health Partners", "Mississauga, ON", "Job Bank Canada", "Oct 17", "Oct 19", "medium", "Asks for a health information management certificate."),
+      p("q7", "Quality Analyst", "Humber Ridge Hospital", "Toronto, ON", "Job Bank Canada", "Oct 16", "Oct 19", "medium", "Run charts and SPC are central; they're new to you."),
+      p("q8", "Evaluation Analyst", "United Way Greater Toronto", "Toronto, ON", "Adzuna", "Oct 16", "Oct 19", "medium", "Program evaluation more than data analysis."),
+      p("q9", "Biostatistics Intern (12 months)", "Clearwater CRO", "Remote (Canada)", "Jooble", "Oct 16", "Oct 19", "medium", "A step back in level, but a door into trials."),
+      p("q10", "Population Health Analyst", "Eastgate Regional Health", "Oshawa, ON", "Job Bank Canada", "Oct 15", "Oct 19", "medium", "Very close to your work; Oshawa is outside your cities."),
+    ],
+  },
+  {
+    date: "Monday, October 19",
+    sources: [
+      { name: "Job Bank Canada", count: 7 },
+      { name: "Adzuna", count: 3 },
+      { name: "Jooble", count: 1 },
+      { name: "LinkedIn (links you pasted)", count: 0 },
+    ],
+    tiers: { high: 0, medium: 0, low: 11 },
+    high: [],
+    medium: [],
+  },
+];

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { draftApplicationAnswer } from "@/lib/application-answer";
 import { demoActions, useDemoState } from "@/lib/state/demo-store";
-import type { Job } from "@/lib/data";
+import type { Evaluation, Job, Profile } from "@/lib/data";
 
 // A plain, ATS-style form in the fictional employer's own look (not the app's design system).
 const field =
@@ -22,8 +23,19 @@ function Row({ label, required, children, hint }: { label: string; required?: bo
   );
 }
 
-export function EmployerForm({ job, questions }: { job: Job; questions: string[] }) {
-  const { assistant, profile, decisions } = useDemoState();
+export function EmployerForm({
+  job,
+  questions,
+  sampleProfile,
+  evaluation,
+}: {
+  job: Job;
+  questions: string[];
+  sampleProfile: Profile;
+  evaluation: Evaluation | null;
+}) {
+  const { chat, profile: storedProfile, decisions } = useDemoState();
+  const profile = storedProfile ?? sampleProfile;
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [email, setEmail] = useState("");
@@ -38,20 +50,18 @@ export function EmployerForm({ job, questions }: { job: Job; questions: string[]
   const alreadyApplied = decisions[job.id]?.decision === "applied";
   const slug = job.company.replace(/[^A-Za-z]+/g, "_");
 
-  // Demo shortcut: pull the answers drafted in the AI Job Search helper chat for this job.
-  const chat = assistant.messages;
-  const fromHelper: Record<string, string> = {};
-  chat.forEach((m, i) => {
-    const next = chat[i + 1];
-    if (m.role === "you" && next?.role === "helper" && questions.includes(m.text)) fromHelper[m.text] = next.text;
-  });
-  const helperCount = Object.keys(fromHelper).length;
+  // Demo shortcut: the same answers the chat's apply card prepared for this job.
+  const preparedInChat = chat.items.some((i) => i.card?.type === "apply" && i.card.jobId === job.id);
+  const fromHelper: Record<string, string> = Object.fromEntries(
+    questions.map((q) => [q, draftApplicationAnswer(q, profile, job, evaluation).answer]),
+  );
+  const helperCount = preparedInChat ? questions.length : 0;
 
   function fillFromAiJobSearch() {
-    const name = (profile?.name ?? "Alex Morgan").split(" ");
+    const name = profile.name.split(" ");
     setFirst(name[0] ?? "");
     setLast(name.slice(1).join(" "));
-    setEmail(profile?.email ?? "alex.morgan@example.com");
+    setEmail(profile.email);
     setCv(`CV_${slug}.pdf`);
     setLetter(`Cover_letter_${slug}.pdf`);
     setAnswers((a) => ({ ...a, ...fromHelper }));
@@ -86,14 +96,14 @@ export function EmployerForm({ job, questions }: { job: Job; questions: string[]
           <span className="font-mono">{submitted}</span>.
         </p>
         <p className="mt-1 text-[14px] text-[#5b6776]">
-          (Demo: nothing was sent. In AI Job Search, this job has moved to Applied on your job board.)
+          (Demo: nothing was sent. In AI Job Search, this job has moved to Applied on your dashboard.)
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
-            href="/applications#applications"
+            href="/dashboard#applications"
             className="rounded-md bg-[#2d5b8a] px-4 py-2 text-[15px] font-semibold text-white hover:bg-[#244b73]"
           >
-            Back to AI Job Search · Job board
+            Back to AI Job Search · Dashboard
           </Link>
           <Link href={`/jobs/${job.id}`} className="rounded-md border border-[#c3ccd6] bg-white px-4 py-2 text-[15px] font-semibold">
             Back to this job
@@ -113,7 +123,7 @@ export function EmployerForm({ job, questions }: { job: Job; questions: string[]
           className="rounded-md border border-dashed border-[#2d5b8a] px-3 py-1.5 text-[13px] font-semibold text-[#2d5b8a] hover:bg-[#2d5b8a]/5"
         >
           Demo shortcut: fill from AI Job Search
-          {helperCount > 0 && ` (${helperCount} answer${helperCount === 1 ? "" : "s"} from the helper)`}
+          {helperCount > 0 && ` (${helperCount} answer${helperCount === 1 ? "" : "s"} prepared in the chat)`}
         </button>
       </div>
 

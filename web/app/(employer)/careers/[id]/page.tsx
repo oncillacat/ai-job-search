@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { EmployerForm } from "@/components/employer-form";
-import { getApplicationQuestions, getJob, getJobs } from "@/lib/data";
+import { getApplicationQuestions, getEvaluation, getJob, getJobs, getProfile } from "@/lib/data";
 
 export async function generateStaticParams() {
   return (await getJobs()).map((j) => ({ id: j.id }));
@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: PageProps<"/careers/[id]">): 
 // A fictional employer's careers page, so the whole pipeline can be tried end to end.
 export default async function CareersPage({ params }: PageProps<"/careers/[id]">) {
   const { id } = await params;
-  const job = await getJob(id);
+  const [job, evaluation, profile] = await Promise.all([getJob(id), getEvaluation(id), getProfile()]);
   if (!job) notFound();
 
   return (
@@ -48,7 +48,7 @@ export default async function CareersPage({ params }: PageProps<"/careers/[id]">
           </ul>
         </section>
 
-        <EmployerForm job={job} questions={getApplicationQuestions(job)} />
+        <EmployerForm job={job} questions={getApplicationQuestions(job)} sampleProfile={profile} evaluation={evaluation} />
       </main>
       <footer className="border-t border-[#d8dee5] bg-white px-4 py-4 text-center text-[12px] text-[#5b6776]">
         © {job.company} (fictional) · Demo careers portal for the AI Job Search preview

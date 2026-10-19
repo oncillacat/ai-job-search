@@ -8,12 +8,49 @@
 import { useSyncExternalStore } from "react";
 import { getDefaultPreferences, type Preferences, type Profile } from "@/lib/data";
 
-export type Decision = "saved" | "applied" | "let-go";
+export type Decision = "saved" | "applied" | "let-go" | "interview" | "offer" | "rejected";
 
 export interface JobDecision {
   decision: Decision;
   reason?: string;
   at: string;
+  /** When the person sent (or marked) a follow-up for this application */
+  followedUpAt?: string;
+}
+
+/** One entry in the chat-first demo thread. Cards reference sample data by id. */
+export type ChatCard =
+  | { type: "intro" }
+  | { type: "upload"; files?: Record<string, string | "skipped">; done?: boolean }
+  | { type: "guesses"; done?: boolean; roles?: string; cities?: string; salary?: string }
+  | { type: "blocker"; done?: boolean }
+  | { type: "search"; round: number; encourage?: { searched: number; applied: number } }
+  | { type: "picker"; purpose: "apply" | "ask" | "interview" | "followup"; done?: string }
+  | { type: "apply"; jobId: string; submitted?: boolean }
+  | { type: "answer"; jobId: string; question: string }
+  | { type: "checkIn"; jobId: string; done?: string }
+  | { type: "followUpEmail"; jobId: string; done?: boolean }
+  | { type: "kind"; jobId: string }
+  | { type: "interview"; jobId: string }
+  | { type: "note" };
+
+export interface ChatItem {
+  id: string;
+  from: "claude" | "you";
+  text?: string;
+  card?: ChatCard;
+}
+
+export interface ChatThread {
+  items: ChatItem[];
+  /** Job the next free-text question is about */
+  focusJob: string | null;
+  /** "prepare" = still prepare applications that have a hard blocker (default) */
+  blockerPref: "prepare" | "skip";
+  /** Times (ISO) of every search, for the encouragement trigger */
+  searches: string[];
+  /** Applications Claude has already checked in about */
+  checkedIn: string[];
 }
 
 export interface ChatMessage {
@@ -34,6 +71,8 @@ export interface DemoState {
   seen: Record<string, boolean>;
   /** The assistant conversation and the jobs attached to it */
   assistant: { messages: ChatMessage[]; attached: string[] };
+  /** The chat-first demo conversation */
+  chat: ChatThread;
 }
 
 const KEY = "ajs-demo-state";
@@ -46,6 +85,7 @@ const initialState: DemoState = {
   readyMarked: {},
   seen: {},
   assistant: { messages: [], attached: [] },
+  chat: { items: [], focusJob: null, blockerPref: "prepare", searches: [], checkedIn: [] },
 };
 
 let state: DemoState | null = null;
@@ -56,7 +96,12 @@ function load(): DemoState {
   try {
     const raw = localStorage.getItem(KEY);
     const saved = raw ? (JSON.parse(raw) as Partial<DemoState>) : {};
-    state = { ...initialState, ...saved, assistant: saved.assistant ?? initialState.assistant };
+    state = {
+      ...initialState,
+      ...saved,
+      assistant: saved.assistant ?? initialState.assistant,
+      chat: { ...initialState.chat, ...(saved.chat ?? {}) },
+    };
   } catch {
     state = initialState;
   }
@@ -136,6 +181,42 @@ export const demoActions = {
   },
   clearConversation() {
     set((s) => ({ ...s, assistant: { messages: [], attached: s.assistant.attached } }));
+  },
+  followedUp(jobId: string) {
+    set((s) => {
+      const d = s.decisions[jobId];
+      const base = d ?? { decision: "applied" as Decision, at: new Date().toISOString() };
+      return { ...s, decisions: { ...s.decisions, [jobId]: { ...base, followedUpAt: new Date().toISOString() } } };
+    });
+  },
+  chatAdd(...items: Omit<ChatItem, "id">[]) {
+    set((s) => ({
+      ...s,
+      chat: {
+        ...s.chat,
+        items: [
+          ...s.chat.items,
+          ...items.map((it, i) => ({ ...it, id: `${Date.now().toString(36)}-${s.chat.items.length + i}` })),
+        ],
+      },
+    }));
+  },
+  chatUpdateCard(itemId: string, patch: Partial<ChatCard>) {
+    set((s) => ({
+      ...s,
+      chat: {
+        ...s.chat,
+        items: s.chat.items.map((it) =>
+          it.id === itemId && it.card ? { ...it, card: { ...it.card, ...patch } as ChatCard } : it,
+        ),
+      },
+    }));
+  },
+  chatSet(patch: Partial<ChatThread>) {
+    set((s) => ({ ...s, chat: { ...s.chat, ...patch } }));
+  },
+  chatRestart() {
+    set((s) => ({ ...s, chat: initialState.chat }));
   },
   reset() {
     set(() => initialState);

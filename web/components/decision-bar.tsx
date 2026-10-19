@@ -14,9 +14,12 @@ const letGoReasons = [
 ];
 
 const confirmations = {
-  saved: "Saved. It's in Applications whenever you're ready.",
+  saved: "Saved. It's on your dashboard whenever you're ready.",
   applied: "Sent. Well done. We'll suggest a gentle follow-up if it goes quiet.",
   "let-go": "Let go thoughtfully. That's part of a good search, and we'll learn from it.",
+  interview: "Interview on the way. Prep notes are ready whenever you are.",
+  offer: "An offer. Take your time deciding.",
+  rejected: "Closed. Thank you for the care you put into this one.",
 } as const;
 
 export function DecisionBar({ jobId, canTailor }: { jobId: string; canTailor: boolean }) {

@@ -5,7 +5,6 @@ import { Card, Pill, SectionTitle } from "@/components/ui";
 import { VerdictPill } from "@/components/verdict";
 import { KeywordCoverage } from "@/components/keyword-coverage";
 import { DecisionBar } from "@/components/decision-bar";
-import { AskButton } from "@/components/assistant-panel";
 import { getEvaluation, getJob, getJobs, getPostingUrl, getTailoredDocuments, type Gate } from "@/lib/data";
 
 export async function generateStaticParams() {
@@ -44,8 +43,8 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
   return (
     <div className="space-y-10">
       <div className="settle">
-        <Link href="/digest" className="text-[15px] text-muted hover:text-ink">
-          ← Today
+        <Link href="/chat" className="text-[15px] text-muted hover:text-ink">
+          ← Chat
         </Link>
         <div className="mt-6 flex flex-wrap items-center gap-2">
           <VerdictPill verdict={evaluation.verdict} />
@@ -92,27 +91,18 @@ export default async function JobPage({ params }: PageProps<"/jobs/[id]">) {
             your profile only.
           </p>
           <div className="flex flex-wrap gap-2">
-            <AskButton
-              jobId={job.id}
+            <Link
+              href={`/chat?ask=${job.id}`}
               className="rounded-md bg-sage px-5 py-2.5 text-[15px] font-medium text-sage-ink hover:opacity-90"
             >
-              Ask about this job
-            </AskButton>
-            {[
-              "How well do I fit this job, honestly?",
-              "Describe a time your analysis changed a decision.",
-              "What should I ask them in the interview?",
-            ].map((p) => (
-              <AskButton
-                key={p}
-                jobId={job.id}
-                prompt={p}
-                send
-                className="rounded-md bg-surface px-3.5 py-2 text-[14px] text-mist-ink hover:bg-surface/70"
-              >
-                {p}
-              </AskButton>
-            ))}
+              Ask about this job in the chat
+            </Link>
+            <Link
+              href={`/chat?apply=${job.id}`}
+              className="rounded-md bg-surface px-4 py-2.5 text-[15px] text-mist-ink hover:bg-surface/70"
+            >
+              Ask Claude to prepare the application
+            </Link>
           </div>
         </Card>
       </section>

@@ -107,3 +107,7 @@ export function getApplyUrl(job: Job) {
 export function getPostingUrl(job: Job) {
   return `/careers/${job.id}`;
 }
+
+export async function getSearchRounds() {
+  return mock.searchRounds;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useDemoState } from "@/lib/state/demo-store";
+import { demoActions, useDemoState, type Decision } from "@/lib/state/demo-store";
 import type { Application, ApplicationStatus, Job } from "@/lib/data";
 
 /** Sample applications merged with the choices made in this browser. */
@@ -20,16 +20,47 @@ function useMergedApplications(applications: Application[]) {
         nextStep: "Saved from your daily list. Open it when you have a quiet moment.",
         timeline: [],
       });
-    } else if (d.decision === "applied" && existing?.status !== "interview") {
+    } else if (d.decision === "applied") {
       rows.set(jobId, {
         ...existing,
         id: existing?.id ?? `local-${jobId}`,
         jobId,
         status: "applied",
         appliedOn: existing?.appliedOn ?? "Today",
-        nextStep: "Sent. Most replies take 2–3 weeks; we'll suggest a follow-up if it stays quiet.",
+        nextStep: d.followedUpAt
+          ? `You followed up on ${new Date(d.followedUpAt).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}. Nothing else to do for now.`
+          : existing?.status === "applied"
+            ? existing.nextStep
+            : "Sent. Most replies take 2–3 weeks; I'll check in if it stays quiet.",
         timeline: existing?.timeline ?? [],
       });
+    } else if (d.decision === "interview" || d.decision === "offer") {
+      rows.set(jobId, {
+        ...existing,
+        id: existing?.id ?? `local-${jobId}`,
+        jobId,
+        status: "interview",
+        outcome: d.decision === "offer" ? "Offer received" : undefined,
+        nextStep:
+          d.decision === "offer"
+            ? "An offer. Take your time deciding."
+            : existing?.status === "interview"
+              ? existing.nextStep
+              : "Interview on the way. Prep notes are ready in the chat.",
+        timeline: existing?.timeline ?? [],
+      });
+    } else if (d.decision === "rejected") {
+      rows.set(jobId, {
+        ...existing,
+        id: existing?.id ?? `local-${jobId}`,
+        jobId,
+        status: "closed",
+        outcome: "Not selected",
+        nextStep: "Closed.",
+        timeline: existing?.timeline ?? [],
+      });
+    } else if (d.decision === "saved" && existing && existing.status !== "saved") {
+      rows.set(jobId, { ...existing, status: "saved", nextStep: "Moved back to drafts." });
     }
   }
   const all = [...rows.values()];
@@ -40,11 +71,11 @@ function useMergedApplications(applications: Application[]) {
 export function SummaryTiles({
   applications,
   recorded,
-  backlog,
+  ranked,
 }: {
   applications: Application[];
   recorded: number;
-  backlog: number;
+  ranked: number;
 }) {
   const { all } = useMergedApplications(applications);
   const count = (s: ApplicationStatus) => all.filter((a) => a.status === s).length;
@@ -54,7 +85,7 @@ export function SummaryTiles({
     { value: count("applied"), label: "Applied" },
     { value: count("saved"), label: "Drafts ready to finish" },
     { value: recorded, label: "Postings recorded" },
-    { value: backlog, label: "High-fit, waiting for a look" },
+    { value: ranked, label: "Jobs evaluated for you" },
   ];
   return (
     <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
@@ -144,6 +175,21 @@ export function ApplicationsBoard({
                         <DocChip ready={!!a.letterReady} label="Cover letter" />
                       </div>
                     )}
+                    {a.outcome && <p className="text-[13px] font-medium text-sage">{a.outcome}</p>}
+                    <label className="flex items-center gap-2 text-[13px] text-muted">
+                      Status
+                      <select
+                        value={statusValue(a)}
+                        onChange={(e) => demoActions.decide(job.id, e.target.value as Decision)}
+                        className="rounded-md border border-line bg-surface px-2 py-1 text-[13px] text-ink"
+                      >
+                        <option value="saved">Draft</option>
+                        <option value="applied">Applied</option>
+                        <option value="interview">Interview</option>
+                        <option value="offer">Offer</option>
+                        <option value="rejected">Closed</option>
+                      </select>
+                    </label>
                     {a.status === "saved" && (
                       <Link
                         href={`/jobs/${job.id}/${a.cvReady && a.letterReady ? "apply" : "tailor"}`}
@@ -190,4 +236,10 @@ function DocChip({ ready, label }: { ready: boolean; label: string }) {
       {label} {ready ? "✓ ready" : "· in progress"}
     </span>
   );
+}
+
+function statusValue(a: Application): Decision {
+  if (a.status === "closed") return "rejected";
+  if (a.outcome === "Offer received") return "offer";
+  return a.status;
 }
