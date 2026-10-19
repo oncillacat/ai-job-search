@@ -94,7 +94,24 @@ export function ChatDemo({ data }: { data: ChatData }) {
 
   // ---------- actions ----------
 
-  function runSearch(echo = true) {
+  /** Postings looked through and applications sent in the last 7 days. */
+  function weekNumbers() {
+    const s = getDemoState();
+    const now = Date.now();
+    const recent = s.chat.searches.filter((t) => now - Date.parse(t) < 7 * 864e5).length;
+    const searched = data.rounds
+      .slice(0, Math.min(recent, data.rounds.length))
+      .reduce((n, r) => n + r.sources.reduce((m, src) => m + src.count, 0), 0);
+    const applied = data.jobs.filter((j) => {
+      const st = statusOf(j.id);
+      if (!st || st === "saved" || st === "let-go") return false;
+      const d = s.decisions[j.id];
+      return d ? now - Date.parse(d.at) < 7 * 864e5 : (data.daysSinceApplied[j.id] ?? 99) <= 7;
+    }).length;
+    return { searched, applied };
+  }
+
+  function runSearch(echo = true, byClaude = false) {
     const s = getDemoState();
     const now = new Date();
     const round = s.chat.searches.length;
@@ -102,7 +119,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const sameDay = searches.filter((t) => new Date(t).toDateString() === now.toDateString()).length;
     const thisWeek = searches.filter((t) => now.getTime() - new Date(t).getTime() < 7 * 864e5).length;
     let encourage: { searched: number; applied: number } | undefined;
-    if (sameDay > 2 || thisWeek > 3) {
+    if (!byClaude && (sameDay > 2 || thisWeek > 3)) {
       const searched = data.rounds
         .slice(0, Math.min(round + 1, data.rounds.length))
         .reduce((n, r) => n + r.sources.reduce((m, src) => m + src.count, 0), 0);
@@ -116,7 +133,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     }
     demoActions.chatSet({ searches, focusJob: null });
     if (echo) you("Do a new search");
-    card({ type: "search", round, encourage });
+    card({ type: "search", round, encourage, byClaude });
     if (round === 0) raiseCheckIns();
   }
 
@@ -149,6 +166,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
   };
 
   function starter(label: (typeof starters)[number]) {
+    if (busy) return;
+    // With Claude connected, a starter button is the same as typing its words.
+    if (live?.on) return void askClaude(label);
     if (label === "Do a new search") return runSearch();
     you(label);
     const purpose = (
@@ -230,10 +250,11 @@ export function ChatDemo({ data }: { data: ChatData }) {
     return msgs.slice(-40);
   }
 
-  async function askClaude(q: string) {
+  /** Sends a message to Claude. `show: false` sends it without adding a chat bubble (e.g. the first search). */
+  async function askClaude(q: string, show = true) {
     const s = getDemoState();
     const messages = transcript(q);
-    you(q);
+    if (show) you(q);
     setBusy(true);
     const statuses = Object.fromEntries(data.jobs.map((j) => [j.id, statusOf(j.id)]));
     let current: string | null = null;
@@ -249,6 +270,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
             statuses,
             daysSinceApplied: data.daysSinceApplied,
             searchesDone: s.chat.searches.length,
+            searchTimes: s.chat.searches,
+            weekSearched: weekNumbers().searched,
+            weekApplied: weekNumbers().applied,
             blockerPref: s.chat.blockerPref,
             focusJob: s.chat.focusJob,
           },
@@ -296,7 +320,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     if (id) demoActions.chatSet({ focusJob: id });
     switch (e.name) {
       case "search_jobs":
-        return runSearch(false);
+        return runSearch(false, true);
       case "prepare_application":
         return id && card({ type: "apply", jobId: id });
       case "check_in":
@@ -430,8 +454,12 @@ export function ChatDemo({ data }: { data: ChatData }) {
               demoActions.chatUpdateCard(item.id, { done: true });
               demoActions.chatSet({ blockerPref: pref });
               you(label);
-              say("Got it. You can change this anytime in Settings. Starting your first search now.");
-              runSearch();
+              if (live?.on) {
+                void askClaude("Setup is done. Please run my first job search.", false);
+              } else {
+                say("Got it. You can change this anytime in Settings. Starting your first search now.");
+                runSearch();
+              }
             }}
           />
         );

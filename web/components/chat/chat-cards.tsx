@@ -389,6 +389,30 @@ export function SearchCard({
   const portals = round.sources.filter((s) => s.count > 0);
   const repeatNothing = card.round >= data.rounds.length - 1 && round.medium.length === 0 && round.high.length === 0;
 
+  if (card.byClaude) {
+    // Claude writes the headline and any encouragement around this card; the card shows the data.
+    return (
+      <div>
+        <p className="text-[14px] text-muted">
+          Searched {portals.map((s) => `${s.name} (${s.count})`).join(", ")} · <strong className="text-ink">{searched}</strong> new
+          postings · {round.tiers.high} high · {round.tiers.medium} medium · {round.tiers.low} low
+        </p>
+        {round.notice && <p className="mt-2 border-l-2 border-sand-ink/40 pl-3 text-[14px] text-sand-ink">{round.notice}</p>}
+        {round.high.length > 0 && <JobTable rows={round.high} data={data} onApply={onApply} onAsk={onAsk} />}
+        {round.high.length === 0 && round.medium.length > 0 && (
+          <JobTable rows={round.medium.slice(0, 10)} data={data} onApply={onApply} onAsk={onAsk} />
+        )}
+        <p className="mt-3 text-[14px] text-muted">
+          The rest are on your{" "}
+          <Link href="/dashboard#today" className="text-sage underline-offset-4 hover:underline">
+            dashboard
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       {round.high.length > 0 ? (

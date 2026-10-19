@@ -22,7 +22,7 @@ How to work:
 - Be warm, plain and short. Lead with the useful part. No hype, no exclamation marks, no emoji. Formatting: short paragraphs; use **bold** and "- " lists sparingly; no headings or tables.
 - Use only facts from <profile>, <state> and the results of your tools. Never invent experience, employers, dates, numbers or contacts. When something is unknown, leave a marked blank like [your start date] and say what to fill in.
 - Use the tools to act. They show cards in the chat, so don't repeat a card's full contents in text; add one or two sentences around it.
-  - search_jobs when the person wants new jobs. It only returns jobs they haven't seen.
+  - search_jobs when the person wants new jobs. It only returns jobs they haven't seen. The card shows the numbers and the job table but no headline, so you write it: say plainly how many strong matches there are (or honestly that there are none new), in one or two sentences. If the result includes "encourage", add one or two warm sentences built only on those numbers (postings looked through and applications sent this week). Never use generic encouragement.
   - prepare_application when they want to apply. It runs fit check, tailored documents and form answers in one go. The person reviews and presses Submit themselves; you never submit anything.
   - check_in when they want to follow up on an application, so they can tell you if they heard back. Then wait for their answer.
   - draft_follow_up only after they say there's no reply yet.
@@ -42,6 +42,11 @@ interface Body {
     statuses: Record<string, Status | null>;
     daysSinceApplied: Record<string, number>;
     searchesDone: number;
+    /** ISO times of earlier searches, for the encouragement rule */
+    searchTimes?: string[];
+    /** Postings looked through and applications sent in the last 7 days, before this search */
+    weekSearched?: number;
+    weekApplied?: number;
     blockerPref: "prepare" | "skip";
     focusJob: string | null;
   };
@@ -128,15 +133,26 @@ async function runTool(name: ToolName, input: Record<string, unknown>, body: Bod
       const rounds = await getSearchRounds();
       const r = rounds[Math.min(body.state.searchesDone + searchCount.n, rounds.length - 1)];
       searchCount.n += 1;
+      // Encouragement rule (docs/plan-chat-first.md): more than 2 searches today or more than 3 this week.
+      const now = Date.now();
+      const times = [...(body.state.searchTimes ?? []).map((t) => Date.parse(t)), ...Array(searchCount.n).fill(now)];
+      const today = times.filter((t) => new Date(t).toDateString() === new Date(now).toDateString()).length;
+      const week = times.filter((t) => now - t < 7 * 864e5).length;
+      const searched = r.sources.reduce((n, src) => n + src.count, 0);
+      const encourage =
+        today > 2 || week > 3
+          ? { postings_looked_through_this_week: (body.state.weekSearched ?? 0) + searched, applications_sent_this_week: body.state.weekApplied ?? 0 }
+          : undefined;
       return {
         ok: true,
         text: JSON.stringify({
-          searched: r.sources.reduce((n, s) => n + s.count, 0),
+          searched,
           sources: r.sources,
           tiers: r.tiers,
           notice: r.notice ?? null,
           high_matches: r.high.map((h) => ({ title: h.title, company: h.company, job_id: h.jobId ?? null })),
           medium_matches_shown: r.medium.slice(0, 10).length,
+          encourage: encourage ?? null,
         }),
       };
     }

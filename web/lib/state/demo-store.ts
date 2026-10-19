@@ -24,7 +24,7 @@ export type ChatCard =
   | { type: "upload"; files?: Record<string, string | "skipped">; done?: boolean }
   | { type: "guesses"; done?: boolean; roles?: string; cities?: string; salary?: string }
   | { type: "blocker"; done?: boolean }
-  | { type: "search"; round: number; encourage?: { searched: number; applied: number } }
+  | { type: "search"; round: number; encourage?: { searched: number; applied: number }; byClaude?: boolean }
   | { type: "picker"; purpose: "apply" | "ask" | "interview" | "followup"; done?: string }
   | { type: "apply"; jobId: string; submitted?: boolean }
   | { type: "answer"; jobId: string; question: string }
