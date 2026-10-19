@@ -405,7 +405,7 @@ function JobTable({
 const shortDate = (iso: string) =>
   iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : "—";
 
-function LiveTable({ rows, onAsk }: { rows: ScoredPosting[]; onAsk?: (p: ScoredPosting) => void }) {
+export function LiveTable({ rows, onAsk }: { rows: ScoredPosting[]; onAsk?: (p: ScoredPosting) => void }) {
   return (
     <div className="mt-3 overflow-x-auto border border-line bg-surface">
       <table className="w-full min-w-[900px] border-collapse text-[14px]">
@@ -774,6 +774,23 @@ export function AnswerCard({ card, data }: { card: Extract<ChatCard, { type: "an
   );
 }
 
+/** The person's own application date and days since, or the sample data's for the sample person. */
+function useApplied(data: ChatData, jobId: string) {
+  const { decisions, chat } = useDemoState();
+  const d = decisions[jobId];
+  if (d?.decision === "applied" || d?.decision === "interview" || d?.decision === "offer" || d?.decision === "rejected") {
+    const at = new Date(d.at);
+    return {
+      on: at.toLocaleDateString("en-CA", { month: "short", day: "numeric" }),
+      days: Math.floor((Date.now() - at.getTime()) / 864e5),
+      app: chat.ownCv ? undefined : data.applications.find((a) => a.jobId === jobId),
+    };
+  }
+  if (chat.ownCv) return { on: undefined, days: undefined, app: undefined };
+  const app = data.applications.find((a) => a.jobId === jobId);
+  return { on: app?.appliedOn, days: data.daysSinceApplied[jobId], app };
+}
+
 export function CheckInCard({
   card,
   data,
@@ -784,16 +801,16 @@ export function CheckInCard({
   onAnswer: (status: "none" | "interview" | "offer" | "rejected", label: string) => void;
 }) {
   const job = data.jobs.find((j) => j.id === card.jobId);
-  const app = data.applications.find((a) => a.jobId === card.jobId);
+  const applied = useApplied(data, card.jobId);
   if (!job) return null;
   return (
     <div>
       <p>
         You applied to <strong>{job.title}</strong> at {job.company}
-        {app?.appliedOn ? ` on ${app.appliedOn}` : ""}
-        {(data.daysSinceApplied[job.id] ?? 0) >= 14
+        {applied.on ? ` on ${applied.on}` : ""}
+        {(applied.days ?? 0) >= 14
           ? ", and I haven't seen an update in over two weeks."
-          : `${data.daysSinceApplied[job.id] !== undefined ? ` (${data.daysSinceApplied[job.id]} days ago)` : ""}. Most replies take two to three weeks, so following up now is optional.`}
+          : `${applied.days !== undefined ? ` (${applied.days} days ago)` : ""}. Most replies take two to three weeks, so following up now is optional.`}
       </p>
       <p className="mt-2 font-display text-lg">Have you heard back from {job.company}?</p>
       {!card.done ? (
@@ -829,7 +846,8 @@ export function FollowUpEmailCard({
 }) {
   const { profile: stored } = useDemoState();
   const job = data.jobs.find((j) => j.id === card.jobId);
-  const app = data.applications.find((a) => a.jobId === card.jobId);
+  const applied = useApplied(data, card.jobId);
+  const app = applied.app;
   const name = (stored ?? data.profile).name;
   const contact = app?.contact?.split(",")[0];
   const email = job
@@ -837,7 +855,7 @@ export function FollowUpEmailCard({
 
 Dear ${contact ?? "Hiring Team"},
 
-I applied for the ${job.title} position${app?.appliedOn ? ` on ${app.appliedOn}` : ""} and wanted to follow up. I'm still very interested in the role and in contributing to ${job.company}'s work.
+I applied for the ${job.title} position${applied.on ? ` on ${applied.on}` : ""} and wanted to follow up. I'm still very interested in the role and in contributing to ${job.company}'s work.
 
 If it would help, I'm happy to share anything else about my experience. Thank you for your time.
 
@@ -851,7 +869,7 @@ ${name}`
   }, [job, email]);
 
   if (!job) return null;
-  const days = data.daysSinceApplied[job.id];
+  const days = applied.days;
   return (
     <div>
       <p>

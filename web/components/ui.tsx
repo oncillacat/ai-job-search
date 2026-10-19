@@ -68,7 +68,7 @@ export function PageHeader({
   title,
   children,
 }: {
-  eyebrow?: string;
+  eyebrow?: ReactNode;
   title: string;
   children?: ReactNode;
 }) {

@@ -6,8 +6,9 @@ import type { Application, ApplicationStatus, Job } from "@/lib/data";
 
 /** Sample applications merged with the choices made in this browser. */
 function useMergedApplications(applications: Application[]) {
-  const { decisions } = useDemoState();
-  const rows = new Map<string, Application>(applications.map((a) => [a.jobId, a]));
+  const { decisions, chat } = useDemoState();
+  // Once Claude has read the person's own CV, only their own decisions count, not the sample applications.
+  const rows = new Map<string, Application>(chat.ownCv ? [] : applications.map((a) => [a.jobId, a]));
   for (const [jobId, d] of Object.entries(decisions)) {
     const existing = rows.get(jobId);
     if (d.decision === "let-go") {

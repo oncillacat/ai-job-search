@@ -63,8 +63,11 @@ export function ChatDemo({ data }: { data: ChatData }) {
   const onboarded = chat.items.some((i) => i.card?.type === "blocker" && i.card.done);
 
   function statusOf(jobId: string): Status {
-    const d = getDemoState().decisions[jobId];
+    const s = getDemoState();
+    const d = s.decisions[jobId];
     if (d) return d.decision;
+    // The sample applications belong to the sample person, not to someone who uploaded their own CV.
+    if (s.chat.ownCv) return null;
     const app = data.applications.find((a) => a.jobId === jobId);
     if (!app) return null;
     return app.status === "closed" ? "rejected" : app.status;
@@ -82,10 +85,18 @@ export function ChatDemo({ data }: { data: ChatData }) {
       .filter(
         (id) =>
           statusOf(id) === "applied" &&
-          (data.daysSinceApplied[id] ?? 0) >= 14 &&
+          (daysSince(id) ?? 0) >= 14 &&
           !s.decisions[id]?.followedUpAt &&
           !s.chat.checkedIn.includes(id),
       );
+  }
+
+  /** Days since the person applied: from their own decision, or the sample data for the sample person. */
+  function daysSince(jobId: string): number | undefined {
+    const s = getDemoState();
+    const d = s.decisions[jobId];
+    if (d?.decision === "applied") return Math.floor((Date.now() - Date.parse(d.at)) / 864e5);
+    return s.chat.ownCv ? undefined : data.daysSinceApplied[jobId];
   }
 
   function raiseCheckIns() {
@@ -305,7 +316,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
           profile: s.profile ?? data.profile,
           state: {
             statuses,
-            daysSinceApplied: data.daysSinceApplied,
+            daysSinceApplied: Object.fromEntries(
+              data.jobs.flatMap((j) => (daysSince(j.id) === undefined ? [] : [[j.id, daysSince(j.id)!]])),
+            ),
             searchesDone: s.chat.searches.length,
             searchTimes: s.chat.searches,
             weekSearched: weekNumbers().searched,
@@ -404,6 +417,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
       const out = (await res.json()) as { profile?: ExtractedProfile; message?: string };
       if (!res.ok || !out.profile) return reopen(out.message ?? "I couldn't read that CV.");
       const p = out.profile;
+      demoActions.chatSet({ ownCv: true });
       void saveFile("profile.json", JSON.stringify(p, null, 2));
       const split = (v: string) => v.split(/,|;| and /).map((x) => x.trim()).filter(Boolean);
       demoActions.setProfile({

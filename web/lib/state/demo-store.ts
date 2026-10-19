@@ -69,6 +69,8 @@ export interface ChatThread {
   checkedIn: string[];
   /** Live posting ids already shown, so repeat searches return only new jobs */
   seenJobs: string[];
+  /** Claude read this person's own CV: the demo's sample applications aren't theirs */
+  ownCv?: boolean;
 }
 
 export interface ChatMessage {
@@ -120,6 +122,18 @@ function load(): DemoState {
       assistant: saved.assistant ?? initialState.assistant,
       chat: { ...initialState.chat, ...(saved.chat ?? {}) },
     };
+    // Threads saved before `ownCv` existed: guesses with reasons mean Claude read a real CV.
+    if (state.chat.ownCv === undefined && state.chat.items.some((i) => i.card?.type === "guesses" && i.card.reasons)) {
+      state = { ...state, chat: { ...state.chat, ownCv: true } };
+    }
+    // Check-ins about the sample person's applications don't belong in a real person's chat.
+    if (state.chat.ownCv) {
+      const decisions = state.decisions;
+      const items = state.chat.items.filter(
+        (i) => !(i.card?.type === "checkIn" || i.card?.type === "followUpEmail") || decisions[i.card.jobId],
+      );
+      if (items.length !== state.chat.items.length) state = { ...state, chat: { ...state.chat, items } };
+    }
   } catch {
     state = initialState;
   }
