@@ -189,16 +189,17 @@ export const demoActions = {
       return { ...s, decisions: { ...s.decisions, [jobId]: { ...base, followedUpAt: new Date().toISOString() } } };
     });
   },
-  chatAdd(...items: Omit<ChatItem, "id">[]) {
+  /** Adds items to the chat and returns their ids. */
+  chatAdd(...items: Omit<ChatItem, "id">[]): string[] {
+    const base = load().chat.items.length;
+    const withIds = items.map((it, i) => ({ ...it, id: `${Date.now().toString(36)}-${base + i}` }));
+    set((s) => ({ ...s, chat: { ...s.chat, items: [...s.chat.items, ...withIds] } }));
+    return withIds.map((it) => it.id);
+  },
+  chatSetText(itemId: string, text: string) {
     set((s) => ({
       ...s,
-      chat: {
-        ...s.chat,
-        items: [
-          ...s.chat.items,
-          ...items.map((it, i) => ({ ...it, id: `${Date.now().toString(36)}-${s.chat.items.length + i}` })),
-        ],
-      },
+      chat: { ...s.chat, items: s.chat.items.map((it) => (it.id === itemId ? { ...it, text } : it)) },
     }));
   },
   chatUpdateCard(itemId: string, patch: Partial<ChatCard>) {

@@ -20,6 +20,7 @@ import {
   UploadCard,
 } from "./chat-cards";
 import type { ChatData } from "./chat-types";
+import type { ChatEvent } from "@/app/api/chat/route";
 
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
 // routing in `route()` once sign-in exists; the cards stay the same.
@@ -40,6 +41,20 @@ export function ChatDemo({ data }: { data: ChatData }) {
   const endRef = useRef<HTMLDivElement>(null);
   const booted = useRef(false);
   const params = useSearchParams();
+  // Live Claude when the server has a key; otherwise the scripted routing below.
+  const [live, setLive] = useState<{ on: boolean; reason?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/chat")
+      .then((r) => r.json() as Promise<{ live: boolean; reason?: string }>)
+      .then((d) => !cancelled && setLive({ on: d.live, reason: d.reason }))
+      .catch(() => !cancelled && setLive({ on: false, reason: "Couldn't reach the server." }));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onboarded = chat.items.some((i) => i.card?.type === "blocker" && i.card.done);
 
@@ -78,7 +93,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
 
   // ---------- actions ----------
 
-  function runSearch() {
+  function runSearch(echo = true) {
     const s = getDemoState();
     const now = new Date();
     const round = s.chat.searches.length;
@@ -99,7 +114,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
       encourage = { searched, applied };
     }
     demoActions.chatSet({ searches, focusJob: null });
-    you("Do a new search");
+    if (echo) you("Do a new search");
     card({ type: "search", round, encourage });
     if (round === 0) raiseCheckIns();
   }
@@ -168,7 +183,134 @@ export function ChatDemo({ data }: { data: ChatData }) {
     }
   }
 
-  // ---------- free text (scripted routing; real Claude replaces this) ----------
+  // ---------- live Claude ----------
+
+  function describe(item: ChatItem): string {
+    const c = item.card;
+    const parts = item.text ? [item.text] : [];
+    if (!c) return parts.join("");
+    const job = "jobId" in c ? ` (${company(c.jobId)}, ${c.jobId})` : "";
+    const note: Record<ChatCard["type"], string> = {
+      intro: "[Showed the welcome]",
+      upload: "[Profile set up from the person's CV]",
+      guesses:
+        c.type === "guesses"
+          ? `[Preferences confirmed: roles ${c.roles ?? "?"}; where ${c.cities ?? "?"}; salary ${c.salary || "not set"}]`
+          : "",
+      blocker: "[Blocker preference answered]",
+      search: c.type === "search" ? `[Showed search results, run ${c.round + 1}]` : "",
+      picker: c.type === "picker" ? `[Asked which job, for: ${c.purpose}]` : "",
+      apply: c.type === "apply" ? `[Showed the application package${job}${c.submitted ? "; marked submitted" : ""}]` : "",
+      answer: `[Answered a question${job}]`,
+      checkIn: c.type === "checkIn" ? `[Asked if they heard back${job}${c.done ? `: ${c.done}` : ""}]` : "",
+      followUpEmail: `[Showed a follow-up email draft${job}]`,
+      kind: "[Offered kind words after a rejection]",
+      interview: `[Showed interview prep${job}]`,
+      note: "",
+    };
+    parts.push(note[c.type]);
+    return parts.filter(Boolean).join("\n");
+  }
+
+  function transcript(nextUserText: string) {
+    const msgs: { role: "user" | "assistant"; content: string }[] = [];
+    for (const it of getDemoState().chat.items) {
+      const role = it.from === "you" ? "user" : "assistant";
+      const content = describe(it);
+      if (!content) continue;
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === role) last.content += `\n${content}`;
+      else msgs.push({ role, content });
+    }
+    const last = msgs[msgs.length - 1];
+    if (last && last.role === "user") last.content += `\n${nextUserText}`;
+    else msgs.push({ role: "user", content: nextUserText });
+    while (msgs.length && msgs[0].role !== "user") msgs.shift();
+    return msgs.slice(-40);
+  }
+
+  async function askClaude(q: string) {
+    const s = getDemoState();
+    const messages = transcript(q);
+    you(q);
+    setBusy(true);
+    const statuses = Object.fromEntries(data.jobs.map((j) => [j.id, statusOf(j.id)]));
+    let current: string | null = null;
+    let text = "";
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages,
+          profile: s.profile ?? data.profile,
+          state: {
+            statuses,
+            daysSinceApplied: data.daysSinceApplied,
+            searchesDone: s.chat.searches.length,
+            blockerPref: s.chat.blockerPref,
+            focusJob: s.chat.focusJob,
+          },
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const err = (await res.json().catch(() => null)) as { message?: string } | null;
+        say(err?.message ?? "Something went wrong. Try again.");
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const e = JSON.parse(line) as ChatEvent;
+          if (e.t === "text") {
+            text += e.v;
+            if (!current) current = demoActions.chatAdd({ from: "claude", text })[0];
+            else demoActions.chatSetText(current, text);
+          } else if (e.t === "tool") {
+            current = null;
+            text = "";
+            handleTool(e);
+          } else if (e.t === "error") {
+            say(e.v);
+          }
+        }
+      }
+    } catch {
+      say("Couldn't reach Claude. Check that the site is running and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleTool(e: Extract<ChatEvent, { t: "tool" }>) {
+    const id = e.jobId;
+    if (id) demoActions.chatSet({ focusJob: id });
+    switch (e.name) {
+      case "search_jobs":
+        return runSearch(false);
+      case "prepare_application":
+        return id && card({ type: "apply", jobId: id });
+      case "check_in":
+        return id && card({ type: "checkIn", jobId: id });
+      case "draft_follow_up":
+        return id && card({ type: "followUpEmail", jobId: id });
+      case "interview_prep":
+        return id && card({ type: "interview", jobId: id });
+      case "update_status":
+        if (id && e.status) demoActions.decide(id, e.status);
+        return;
+    }
+  }
+
+  // ---------- free text (scripted routing when Claude isn't connected) ----------
 
   function findJob(text: string) {
     const t = text.toLowerCase();
@@ -179,8 +321,12 @@ export function ChatDemo({ data }: { data: ChatData }) {
 
   function route(text: string) {
     const q = text.trim();
-    if (!q) return;
+    if (!q || busy) return;
     setDraft("");
+    if (live?.on) {
+      void askClaude(q);
+      return;
+    }
     const t = q.toLowerCase();
     const jobId = findJob(q) ?? undefined;
     if (/\b(search|find|new jobs|look for)\b/.test(t)) return runSearch();
@@ -322,8 +468,22 @@ export function ChatDemo({ data }: { data: ChatData }) {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl">Chat</h1>
-          <p className="text-[14px] text-muted">
-            Scripted demo: replies follow the plan&apos;s rules. Real Claude arrives with sign-in.
+          <p className="flex flex-wrap items-center gap-2 text-[14px] text-muted">
+            {live === null ? (
+              "Checking the connection…"
+            ) : live.on ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-sage-soft px-2 py-0.5 text-sage">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sage" /> Connected to Claude
+                </span>
+                Typed messages go to Claude; buttons and cards work as before.
+              </>
+            ) : (
+              <>
+                <span className="rounded-md bg-surface-2 px-2 py-0.5">Scripted demo</span>
+                {live.reason}
+              </>
+            )}
           </p>
         </div>
         {chat.items.length > 1 && (
@@ -359,6 +519,12 @@ export function ChatDemo({ data }: { data: ChatData }) {
               </div>
             </li>
           ),
+        )}
+        {busy && (
+          <li className="flex items-center gap-2 pl-10 text-[14px] text-muted">
+            <span aria-hidden className="breathe-circle h-3.5 w-3.5 rounded-full bg-mist" />
+            Claude is thinking…
+          </li>
         )}
       </ol>
       <div ref={endRef} />
@@ -403,7 +569,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
             placeholder={onboarded ? "Ask anything, or try “apply to Maplewood”…" : "Finish setting up your profile above to start chatting."}
             className="min-w-0 flex-1 resize-none rounded-md border border-line bg-surface px-3.5 py-2.5 focus:border-sage focus:outline-none disabled:opacity-60"
           />
-          <button type="submit" className={`${btnPrimary} py-2.5`} disabled={!onboarded || !draft.trim()}>
+          <button type="submit" className={`${btnPrimary} py-2.5`} disabled={!onboarded || !draft.trim() || busy}>
             Send
           </button>
         </form>
