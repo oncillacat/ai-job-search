@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+/* Calm palette: white ground, mist blue as the signature, sage for actions. No alarm reds anywhere. */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #eef4f8;
+  --ink: #1f2a33;
+  --muted: #56687a;
+  --line: #d3e1eb;
+  --sage: #4f6f5d;
+  --sage-ink: #ffffff;
+  --sage-soft: #e6efe9;
+  --mist: #bcd3e3;
+  --mist-soft: #eaf2f7;
+  --mist-ink: #2f4556;
+  --sand: #f3ead9;
+  --sand-ink: #6b5531;
+  --clay: #8c5f45;
+  --clay-soft: #f6ebe3;
+  --focus: #4f6f5d;
+  /* Chart series (validated for colour-blind separation): teal, amber, violet, green, plus a neutral. */
+  --chart-1: #008b9c;
+  --chart-2: #b0690f;
+  --chart-3: #5a46b0;
+  --chart-4: #2a8050;
+  --chart-neutral: #7b8794;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131a20;
+    --surface: #1a232b;
+    --surface-2: #222d36;
+    --ink: #e7eef3;
+    --muted: #9daebb;
+    --line: #2d3a45;
+    --sage: #9cbfa8;
+    --sage-ink: #131a20;
+    --sage-soft: #1f2f27;
+    --mist: #2a3d4b;
+    --mist-soft: #1d2a34;
+    --mist-ink: #bcd3e3;
+    --sand: #3a3328;
+    --sand-ink: #e4d3b4;
+    --clay: #d9ab8e;
+    --clay-soft: #3a2d26;
+    --focus: #9cbfa8;
+    --chart-1: #11a0ab;
+    --chart-2: #c7823a;
+    --chart-3: #8d7ee0;
+    --chart-4: #3fa56d;
+    --chart-neutral: #6f7c88;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #131a20;
+  --surface: #1a232b;
+  --surface-2: #222d36;
+  --ink: #e7eef3;
+  --muted: #9daebb;
+  --line: #2d3a45;
+  --sage: #9cbfa8;
+  --sage-ink: #131a20;
+  --sage-soft: #1f2f27;
+  --mist: #2a3d4b;
+  --mist-soft: #1d2a34;
+  --mist-ink: #bcd3e3;
+  --sand: #3a3328;
+  --sand-ink: #e4d3b4;
+  --clay: #d9ab8e;
+  --clay-soft: #3a2d26;
+  --focus: #9cbfa8;
+  --chart-1: #11a0ab;
+  --chart-2: #c7823a;
+  --chart-3: #8d7ee0;
+  --chart-4: #3fa56d;
+  --chart-neutral: #6f7c88;
+  color-scheme: dark;
+}
+
+/* Square corners: boxes are sharp rectangles; small controls keep a hint of softening. */
+@theme {
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  /* Tables, cards, panels and drawers: fully square. */
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-sage: var(--sage);
+  --color-sage-ink: var(--sage-ink);
+  --color-sage-soft: var(--sage-soft);
+  --color-sand: var(--sand);
+  --color-sand-ink: var(--sand-ink);
+  --color-clay: var(--clay);
+  --color-clay-soft: var(--clay-soft);
+  --color-mist: var(--mist);
+  --color-mist-soft: var(--mist-soft);
+  --color-mist-ink: var(--mist-ink);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-neutral: var(--chart-neutral);
+  --font-display: var(--font-source-sans), system-ui, sans-serif;
+  --font-sans: var(--font-source-sans), system-ui, sans-serif;
+}
+
+body {
+  /* Soft blue at the top, fading to the page colour (white in light mode). */
+  background: linear-gradient(180deg, var(--mist) 0, var(--mist-soft) 38rem, var(--bg) 70rem) no-repeat, var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.65;
+}
+
+/* Headings and the app's reassuring lines: same sans family as body, set heavier and slightly tighter. */
+.font-display {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+p.font-display {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Slow, gentle entrance. Disabled for people who prefer less motion. */
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.settle {
+  animation: settle 600ms ease-out both;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(0.72);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.breathe-circle {
+  animation: breathe 8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settle,
+  .breathe-circle {
+    animation: none;
+  }
+  * {
+    transition: none !important;
+  }
+}
