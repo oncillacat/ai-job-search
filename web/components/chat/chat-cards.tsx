@@ -132,7 +132,8 @@ export function UploadCard({
               }}
             />
             {required ? (
-              !value && (
+              // With Claude connected there is no sample person: only the person's own CV.
+              !value && !live && (
                 <button
                   type="button"
                   className={btnGhost}

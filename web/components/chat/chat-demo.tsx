@@ -469,7 +469,8 @@ export function ChatDemo({ data }: { data: ChatData }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages,
-          profile: s.profile ?? data.profile,
+          // Never the sample person's profile: Claude works only from this person's own CV.
+          profile: s.profile,
           state: {
             statuses,
             daysSinceApplied: Object.fromEntries(

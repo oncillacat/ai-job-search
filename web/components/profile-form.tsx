@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { demoActions, useDemoState } from "@/lib/state/demo-store";
 import type { Education, Experience, Profile } from "@/lib/data";
 import { Button, Card } from "./ui";
@@ -24,13 +25,38 @@ const list = (s: string) =>
     .map((x) => x.trim())
     .filter(Boolean);
 
-export function ProfileEditor({ sample }: { sample: Profile }) {
-  const { profile: stored } = useDemoState();
+export function ProfileEditor({ sample, live }: { sample: Profile; live: boolean }) {
+  const { profile: stored, chat } = useDemoState();
+  // With Claude connected (or the person's own CV read) there is no sample person to fall back to.
+  if (!stored && (live || chat.ownCv)) {
+    return (
+      <div className="border border-line bg-surface px-6 py-10 text-center sm:px-10">
+        <p className="font-display text-xl">No profile yet.</p>
+        <p className="mx-auto mt-2 max-w-prose text-muted">
+          Upload your CV in the chat. What Claude reads from it appears here, and you can correct anything before your
+          first search.
+        </p>
+        <Link
+          href="/chat"
+          className="mt-5 inline-block bg-sage px-4 py-2 text-[15px] font-medium text-sage-ink hover:opacity-90"
+        >
+          Go to the chat
+        </Link>
+      </div>
+    );
+  }
   // Re-mount once stored edits are read from this browser.
-  return <ProfileForm key={stored ? "stored" : "sample"} initial={stored ?? sample} sample={sample} />;
+  return (
+    <ProfileForm
+      key={stored ? "stored" : "sample"}
+      initial={stored ?? sample}
+      sample={sample}
+      canReset={!live && !chat.ownCv}
+    />
+  );
 }
 
-function ProfileForm({ initial, sample }: { initial: Profile; sample: Profile }) {
+function ProfileForm({ initial, sample, canReset }: { initial: Profile; sample: Profile; canReset: boolean }) {
   const [p, setP] = useState(initial);
   const [saved, setSaved] = useState(false);
   const [newSkill, setNewSkill] = useState("");
@@ -343,7 +369,7 @@ function ProfileForm({ initial, sample }: { initial: Profile; sample: Profile })
         <span className="text-[15px] text-muted" aria-live="polite">
           {saved ? "Saved. Your next tailoring will use this." : "Changes stay in this browser."}
         </span>
-        {initial !== sample && (
+        {canReset && initial !== sample && (
           <button
             type="button"
             className="text-[15px] text-muted underline-offset-4 hover:text-ink hover:underline"
