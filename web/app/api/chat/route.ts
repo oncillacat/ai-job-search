@@ -303,7 +303,7 @@ async function runTool(
     case "prepare_posting":
       return {
         ok: true,
-        text: "The application card is shown and is preparing the fit check, tailored CV, cover letter and form answers now (one to two minutes). Say one short sentence; don't repeat its contents. The person reviews it and submits on the employer's site.",
+        text: "The application card is shown and is preparing the fit check, tailored CV and cover letter now (one to two minutes). Say one short sentence; don't repeat its contents. Don't guess or answer form questions; if the form asks any, the person will paste them. The person reviews and submits on the employer's site.",
       };
   }
 }
@@ -363,7 +363,7 @@ export async function POST(request: Request) {
               {
                 name: "prepare_posting",
                 description:
-                  "Prepare an application for one real posting in one go: read the full posting, check fit, write a tailored CV, cover letter and answers to common form questions. Shows a card that does the work and lets the person review, edit and download. Takes a minute or two.",
+                  "Prepare an application for one real posting in one go: read the full posting, check fit, write a tailored CV and cover letter. Shows a card that does the work and lets the person review, edit and download. Takes a minute or two.",
                 input_schema: {
                   type: "object" as const,
                   properties: { posting_id: { type: "string", enum: postingIds, description: "From saved_postings or recent_postings." } },

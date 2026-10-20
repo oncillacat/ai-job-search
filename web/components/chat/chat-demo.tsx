@@ -391,7 +391,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
         c.type === "tailor"
           ? `[Prepared an application for ${c.posting.title} at ${c.posting.company} (${c.posting.id}): ${
               c.result
-                ? `fit ${Math.round(c.result.result.fit.score)}/100, tailored CV, cover letter and form answers shown for review`
+                ? `fit ${Math.round(c.result.result.fit.score)}/100, tailored CV and cover letter shown for review`
                 : c.error
                   ? `failed: ${c.error}`
                   : "still preparing"

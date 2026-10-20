@@ -8,7 +8,8 @@ import { Box, btnGhost, btnPrimary, btnQuiet, CopyButton } from "./chat-cards";
 import { CvPreview, plainText, printDocument } from "./cv-document";
 
 // Application prepared live for one real posting: fit check, tailored CV, cover letter and
-// answers to common form questions. The person reviews, edits and submits on the employer's site.
+// nothing else: form questions are answered only when the person pastes the real ones into the chat.
+// The person reviews, edits and submits on the employer's site.
 
 const steps = ["Reading the full posting", "Checking how well you fit", "Writing your CV and cover letter"];
 
@@ -90,7 +91,6 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
         const dir = `generated/${p.id}`;
         void saveFile(`${dir}/cv.md`, cvText);
         void saveFile(`${dir}/cover-letter.txt`, letterText);
-        void saveFile(`${dir}/form-answers.txt`, result.result.questions.map((q) => `${q.question}\n${q.answer}`).join("\n\n"));
         void saveFile(`${dir}/fit-check.json`, JSON.stringify(result.result.fit, null, 2));
       })
       .catch((e: unknown) => {
@@ -150,7 +150,6 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
   const base = slug(`${p.company} ${p.title}`);
   const cvText = card.cvText ?? cvToText(r.cv, name, r.language === "fr", contactLine(profile));
   const letterText = card.letterText ?? r.cover_letter;
-  const answers = r.questions.map((q) => `${q.question}\n${q.answer}`).join("\n\n");
   const openUrl = card.result.applyUrl ?? p.url;
 
   return (
@@ -233,20 +232,9 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
         }}
       />
 
-      <div>
-        <p className="mb-1 font-medium">Answers to common form questions</p>
-        <div className="space-y-3 border border-line bg-surface p-4">
-          {r.questions.map((q) => (
-            <div key={q.question}>
-              <p className="text-[14px] font-medium">{q.question}</p>
-              <p className="mt-0.5 whitespace-pre-wrap text-[14px]">{q.answer}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-2">
-          <CopyButton text={answers} label="Copy all answers" />
-        </div>
-      </div>
+      <p className="text-[14px] text-muted">
+        If the application form asks questions, paste them here in the chat and I&apos;ll draft answers from your profile.
+      </p>
 
       {r.to_fill.length > 0 && (
         <Box tint="sand">
