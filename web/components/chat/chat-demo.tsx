@@ -1122,7 +1122,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
             }}
             placeholder={
               onboarded
-                ? "Ask anything, or try “apply to Maplewood”…"
+                ? "Ask anything about your search or a job…"
                 : "Finish setting up your profile above to start chatting."
             }
             className="min-w-0 flex-1 resize-none rounded-md border border-line bg-surface px-3.5 py-2.5 focus:border-sage focus:outline-none disabled:opacity-60"
@@ -1151,20 +1151,40 @@ function LocalAppHint() {
       className="mb-4 border-l-2 border-mist-ink/40 bg-mist-soft px-4 py-3 text-[15px] text-mist-ink"
     >
       <p>
-        <strong>To include LinkedIn, use the app on your computer.</strong> This
-        site can&apos;t reach LinkedIn from its servers, and browsers don&apos;t
-        let a website search from your computer. Here, searches use Job Bank
-        only.
+        <strong>To include LinkedIn, use the Mac app.</strong> This site
+        can&apos;t reach LinkedIn from its servers, and browsers don&apos;t let
+        a website search from your computer. Here, searches use Job Bank only.
       </p>
       <ol className="mt-2 list-decimal space-y-1.5 pl-5">
         <li>
-          Double-click <strong>Start AI Job Search</strong> on your Desktop. The
-          first time, it asks for your access code, then opens the app in your
-          browser.
+          <a
+            href="/download"
+            className="font-medium underline underline-offset-4"
+          >
+            Download AI Job Search for Mac
+          </a>{" "}
+          and follow the steps there. The first time, it asks for your access
+          code.
         </li>
         <li>
-          No Desktop starter? Paste this into Terminal:{" "}
-          <code className="bg-surface px-1.5 py-0.5 text-[13px] text-ink">
+          Already installed? Open <strong>AI Job Search</strong> from
+          Applications, or{" "}
+          <a
+            href="http://localhost:3124/chat"
+            className="underline underline-offset-4"
+          >
+            go to it if it&apos;s running
+          </a>
+          .
+        </li>
+      </ol>
+      <details className="mt-2 text-[13px]">
+        <summary className="cursor-pointer">
+          Running it from the code instead?
+        </summary>
+        <p className="mt-1">
+          Paste this into Terminal:{" "}
+          <code className="bg-surface px-1.5 py-0.5 text-ink">
             {START_COMMAND}
           </code>{" "}
           <button
@@ -1178,18 +1198,8 @@ function LocalAppHint() {
           >
             {copied ? "Copied" : "Copy"}
           </button>
-        </li>
-        <li>
-          Already running?{" "}
-          <a
-            href="http://localhost:3124/chat"
-            className="font-medium underline underline-offset-4"
-          >
-            Open the app on your computer
-          </a>
-          . It uses Claude through this site, with the same access code.
-        </li>
-      </ol>
+        </p>
+      </details>
     </div>
   );
 }

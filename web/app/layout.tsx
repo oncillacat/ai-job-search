@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { liveAvailable } from "@/lib/live";
 import { Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
@@ -31,8 +32,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           role="note"
           className="bg-sand px-4 py-2 text-center text-[14px] leading-snug text-sand-ink"
         >
-          <strong className="font-semibold">Demo only.</strong> This site doesn&apos;t really work yet: the jobs,
-          people and companies are made up, nothing is searched or sent, and anything you enter stays in your browser.
+          {liveAvailable() ? (
+            <>
+              <strong className="font-semibold">Preview.</strong> Real job searches with Claude. Nothing is ever
+              submitted for you, and your CV and documents stay in your browser.
+            </>
+          ) : (
+            <>
+              <strong className="font-semibold">Sample demo.</strong> The jobs, people and companies here are made up,
+              and anything you enter stays in your browser. With an access code, or in the Mac app, it searches real
+              jobs.
+            </>
+          )}
         </div>
         {children}
       </body>

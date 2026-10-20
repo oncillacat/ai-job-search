@@ -1,3 +1,17 @@
+> ### This fork adds the AI Job Search app
+>
+> A calm, chat-first website and Mac app built on this framework: Claude reads your CV, searches Canadian job sites
+> (LinkedIn included, from your own computer), rates the matches honestly and prepares a tailored CV and cover letter
+> for you to review and send.
+>
+> - **Download for Mac:** [download page and instructions](https://ai-job-search-phi.vercel.app/download)
+> - **Shared site:** https://ai-job-search-phi.vercel.app (Claude features need an access code)
+> - **Docs and code:** [`web/README.md`](web/README.md)
+>
+> *Everything below is the original framework's README by Mads Lorentzen, kept as written.*
+
+---
+
 <p align="center">
   <img src="assets/mascot/pip_flight_loop.gif" alt="Pip, the courier bird" width="200">
 </p>

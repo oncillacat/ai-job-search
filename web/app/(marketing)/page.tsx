@@ -19,9 +19,18 @@ const worries = [
 ];
 
 const steps = [
-  { title: "Upload your CV once", body: "We turn it into a profile you can read and correct." },
-  { title: "Read your 9 a.m. list", body: "Only strong Canadian matches, with reasons. Nothing more." },
-  { title: "Tailor, check, send", body: "A tailored CV and cover letter, honest about any gaps." },
+  {
+    title: "Upload your CV once",
+    body: "We turn it into a profile you can read and correct.",
+  },
+  {
+    title: "Read your 9 a.m. list",
+    body: "Only strong Canadian matches, with reasons. Nothing more.",
+  },
+  {
+    title: "Tailor, check, send",
+    body: "A tailored CV and cover letter, honest about any gaps.",
+  },
 ];
 
 const container = "mx-auto w-full max-w-4xl px-4 sm:px-6";
@@ -31,17 +40,31 @@ export default function Home() {
     <div>
       <section>
         <div className={`${container} settle pb-20 pt-12 sm:pb-28 sm:pt-20`}>
-          <p className="mb-4 text-sm tracking-wide text-mist-ink">A calmer job search, for Canada</p>
+          <p className="mb-4 text-sm tracking-wide text-mist-ink">
+            A calmer job search, for Canada
+          </p>
           <h1 className="max-w-2xl text-balance font-display text-4xl leading-[1.15] sm:text-5xl">
             Fewer tabs. Fewer rewrites. Nothing important missed.
           </h1>
           <p className="mt-6 max-w-xl text-lg text-mist-ink">
-            Applying for jobs asks for a lot of attention. AI Job Search reads the postings, tells
-            you which few are worth your time, and helps you send a CV you can stop editing.
+            Applying for jobs asks for a lot of attention. AI Job Search reads
+            the postings, tells you which few are worth your time, and helps you
+            send a CV you can stop editing.
           </p>
           <div className="mt-10 flex flex-wrap gap-3">
             <ButtonLink href="/chat">Start chatting</ButtonLink>
-            <ButtonLink href="/dashboard" variant="quiet" className="!bg-surface hover:!bg-surface/80">
+            <ButtonLink
+              href="/download"
+              variant="quiet"
+              className="!bg-surface hover:!bg-surface/80"
+            >
+              Download for Mac
+            </ButtonLink>
+            <ButtonLink
+              href="/dashboard"
+              variant="quiet"
+              className="!bg-surface hover:!bg-surface/80"
+            >
               See the dashboard
             </ButtonLink>
           </div>
@@ -52,7 +75,10 @@ export default function Home() {
         <section aria-labelledby="worries" className="-mt-10 pb-10">
           <div className="grid gap-4 sm:grid-cols-3">
             {worries.map((w) => (
-              <Card key={w.worry} className="!p-6 shadow-[0_1px_2px_rgba(31,42,51,0.04)]">
+              <Card
+                key={w.worry}
+                className="!p-6 shadow-[0_1px_2px_rgba(31,42,51,0.04)]"
+              >
                 <p className="font-display text-lg leading-snug">{w.worry}</p>
                 <p className="mt-3 text-muted">{w.answer}</p>
               </Card>
@@ -86,27 +112,35 @@ export default function Home() {
           <div className="grid gap-8 sm:grid-cols-[180px_1fr]">
             <div>
               <p className="text-sm tracking-wide text-muted">Our story</p>
-              <h2 id="story" className="mt-2 text-balance font-display text-2xl leading-snug">
+              <h2
+                id="story"
+                className="mt-2 text-balance font-display text-2xl leading-snug"
+              >
                 Built by someone who was tired of rewriting.
               </h2>
             </div>
             <div className="max-w-prose space-y-4 text-[17px]">
               <p>
-                This started with one job search. Every posting meant the same evening ritual: open the
-                CV, rewrite the summary, reorder the bullet points, swap in the posting&apos;s keywords,
-                second-guess every word, export, and do it all again for the next one.
+                This started with one job search. Every posting meant the same
+                evening ritual: open the CV, rewrite the summary, reorder the
+                bullet points, swap in the posting&apos;s keywords, second-guess
+                every word, export, and do it all again for the next one.
               </p>
               <p>
-                The hardest part wasn&apos;t the work. It was never knowing when a version was good
-                enough, and the quiet fear that the right job was sitting in a tab that hadn&apos;t been
-                opened yet. Job sites only made it louder, with more alerts, more listings and more
+                The hardest part wasn&apos;t the work. It was never knowing when
+                a version was good enough, and the quiet fear that the right job
+                was sitting in a tab that hadn&apos;t been opened yet. Job sites
+                only made it louder, with more alerts, more listings and more
                 &ldquo;apply now&rdquo;.
               </p>
               <p>
-                What was missing was something that would do the reading, say plainly which few jobs
-                were worth the effort, tailor the CV honestly from facts already written once, and then
-                say: <em className="font-display">this is ready, you can send it.</em> So we built it, for
-                anyone who feels the same way.
+                What was missing was something that would do the reading, say
+                plainly which few jobs were worth the effort, tailor the CV
+                honestly from facts already written once, and then say:{" "}
+                <em className="font-display">
+                  this is ready, you can send it.
+                </em>{" "}
+                So we built it, for anyone who feels the same way.
               </p>
             </div>
           </div>
@@ -117,7 +151,9 @@ export default function Home() {
             <p className="mx-auto max-w-lg font-display text-2xl leading-snug">
               “Good enough, sent, is better than perfect, still open in a tab.”
             </p>
-            <p className="mt-3 text-muted">The idea this tool is built around.</p>
+            <p className="mt-3 text-muted">
+              The idea this tool is built around.
+            </p>
           </Card>
         </section>
 
@@ -136,9 +172,10 @@ export default function Home() {
                 >
                   MadsLorentzen/ai-job-search
                 </a>
-                , an open-source job application framework released under the MIT licence. Its fit
-                evaluation, CV tailoring and interview prep are what this site is built on.
-                Please feel free to use it, copy it, and adapt it for your own search.
+                , an open-source job application framework released under the
+                MIT licence. Its fit evaluation, CV tailoring and interview prep
+                are what this site is built on. Please feel free to use it, copy
+                it, and adapt it for your own search.
               </p>
             </div>
             <a

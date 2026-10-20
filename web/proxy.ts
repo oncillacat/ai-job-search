@@ -4,7 +4,7 @@ import { ACCESS_COOKIE, hasAccessCookie, passcodeRequired } from "@/lib/access";
 // When the site runs behind a passcode (Vercel with APP_PASSCODE), every app page and API needs
 // the access cookie. The landing page, privacy page and the access page itself stay open.
 
-const OPEN = [/^\/$/, /^\/privacy\/?$/, /^\/access\/?$/, /^\/api\/access\/?$/];
+const OPEN = [/^\/$/, /^\/privacy\/?$/, /^\/download\/?$/, /^\/access\/?$/, /^\/api\/access\/?$/];
 
 export async function proxy(request: NextRequest) {
   if (!passcodeRequired()) return NextResponse.next();
