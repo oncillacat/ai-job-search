@@ -154,7 +154,9 @@ function parseLinkedIn(html: string): Posting[] {
 }
 
 export async function searchLinkedIn(q: PortalQuery): Promise<PortalResult> {
-  if (process.env.ENABLE_LINKEDIN === "0") return { name: "LinkedIn", status: "not_connected", postings: [] };
+  // Off on Vercel unless asked for: LinkedIn's terms forbid automated access, and it blocks cloud servers.
+  const linkedinOn = process.env.ENABLE_LINKEDIN ? process.env.ENABLE_LINKEDIN !== "0" : !process.env.VERCEL;
+  if (!linkedinOn) return { name: "LinkedIn", status: "not_connected", postings: [] };
   const place = placeOf(q.cities[0] ?? "Canada");
   const location = place.province ? `${place.city}, ${place.province}, Canada` : "Canada";
   const postings: Posting[] = [];

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { liveAllowed } from "@/lib/access";
 import {
   getApplicationQuestions,
   getEvaluation,
@@ -14,6 +15,9 @@ import type { LiveSearch } from "@/lib/search/types";
 // Live chat: Claude decides which actions to take through tools. Each tool maps to a card the
 // browser already knows how to show, so the server streams back text plus "tool" events.
 // Local only until sign-in exists (docs/plan-chat-first.md): disabled on Vercel unless allowed.
+
+// A search or a tailoring can take a minute or two.
+export const maxDuration = 300;
 
 const MODEL = "claude-opus-5-5";
 const MAX_BODY = 200_000;
@@ -309,18 +313,8 @@ async function runTool(
 }
 
 export async function POST(request: Request) {
-  if (process.env.VERCEL && !process.env.ALLOW_PUBLIC_CHAT) {
-    return Response.json(
-      { error: "disabled", message: "Live chat is off on the public demo until sign-in exists." },
-      { status: 503 },
-    );
-  }
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    return Response.json(
-      { error: "not_configured", message: "Add ANTHROPIC_API_KEY to web/.env.local and restart the server." },
-      { status: 503 },
-    );
-  }
+  const access = await liveAllowed(request);
+  if (!access.ok) return Response.json({ error: "disabled", message: access.message }, { status: access.status });
   const raw = await request.text();
   if (raw.length > MAX_BODY) return Response.json({ error: "too_large" }, { status: 413 });
   let body: Body | null = null;
@@ -488,12 +482,8 @@ export async function POST(request: Request) {
 }
 
 /** Lets the chat page show whether live Claude is available, without spending tokens. */
-export async function GET() {
-  if (process.env.VERCEL && !process.env.ALLOW_PUBLIC_CHAT) {
-    return Response.json({ live: false, reason: "Live chat is off on the public demo until sign-in exists." });
-  }
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    return Response.json({ live: false, reason: "Add ANTHROPIC_API_KEY to web/.env.local and restart the server." });
-  }
+export async function GET(request: Request) {
+  const access = await liveAllowed(request);
+  if (!access.ok) return Response.json({ live: false, reason: access.message, build: process.env.NEXT_PUBLIC_BUILD_STAMP });
   return Response.json({ live: true, build: process.env.NEXT_PUBLIC_BUILD_STAMP });
 }

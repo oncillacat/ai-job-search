@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { liveAllowed } from "@/lib/access";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { postingDetail } from "@/lib/search/detail";
@@ -8,6 +9,9 @@ import type { Posting } from "@/lib/search/types";
 // check, a tailored CV and a cover letter, using only the
 // person's profile. Nothing is stored here; the browser keeps the result.
 // Local only until sign-in exists (docs/plan-chat-first.md): disabled on Vercel unless allowed.
+
+// A search or a tailoring can take a minute or two.
+export const maxDuration = 300;
 
 const MODEL = "claude-opus-5-5";
 
@@ -73,12 +77,8 @@ function validPosting(raw: unknown): Posting | null {
 }
 
 export async function POST(request: Request) {
-  if (process.env.VERCEL && !process.env.ALLOW_PUBLIC_CHAT) {
-    return Response.json({ message: "Preparing applications is off on the public demo until sign-in exists." }, { status: 503 });
-  }
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    return Response.json({ message: "Add ANTHROPIC_API_KEY to web/.env.local and restart the server." }, { status: 503 });
-  }
+  const access = await liveAllowed(request);
+  if (!access.ok) return Response.json({ message: access.message }, { status: access.status });
   const raw = await request.text();
   if (raw.length > 200_000) return Response.json({ message: "That request is too large." }, { status: 413 });
   let body: { posting?: unknown; profile?: unknown } = {};
