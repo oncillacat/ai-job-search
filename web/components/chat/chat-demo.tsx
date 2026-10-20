@@ -32,6 +32,7 @@ import type { ChatEvent } from "@/app/api/chat/route";
 import type { ExtractedProfile } from "@/app/api/profile/route";
 import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
 import { TailorCard } from "./tailor-card";
+import { helperAvailable, searchFromThisComputer } from "@/lib/state/local-helper";
 
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
 // routing in `route()` once sign-in exists; the cards stay the same.
@@ -58,6 +59,15 @@ export function ChatDemo({ data }: { data: ChatData }) {
     null,
   );
   const [busy, setBusy] = useState(false);
+  /** The local search helper runs on this computer (shared site only). */
+  const [localHelper, setLocalHelper] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void helperAvailable().then((v) => !cancelled && setLocalHelper(v));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   /** Same as `live?.on`, readable inside handlers without waiting for a re-render. */
   const liveRef = useRef(false);
   /** The server was rebuilt after this page loaded: new features need a reload. */
@@ -457,6 +467,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const messages = transcript(q);
     if (show) you(q);
     setBusy(true);
+    const localSearch = await helperAvailable();
     const statuses = Object.fromEntries(
       data.jobs.map((j) => [j.id, statusOf(j.id)]),
     );
@@ -488,6 +499,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
             prefs: confirmedPrefs(),
             // With Claude connected there is no sample person: everything is this person's own.
             ownCv: true,
+            localSearch,
             recent: [...knownPostings().values()].slice(-40).map((x) => ({
               posting_id: x.id,
               title: x.title,
@@ -567,11 +579,31 @@ export function ChatDemo({ data }: { data: ChatData }) {
     }
   }
 
+  /** The search runs on this person's computer (local helper); the shared site's Claude rates it. */
+  async function runLocalSearch(q: { roles: string[]; cities: string[] }) {
+    const progress = demoActions.chatAdd({
+      from: "claude",
+      text: "Searching the job sites from your computer, then reading the closest matches. This takes about a minute.",
+    })[0];
+    setBusy(true);
+    try {
+      const s = getDemoState();
+      const search = await searchFromThisComputer({ ...q, profile: s.profile, seen: s.chat.seenJobs });
+      demoActions.chatRemove(progress);
+      runSearch(false, true, search);
+    } catch (err) {
+      demoActions.chatSetText(progress, err instanceof Error ? err.message : "The search didn't finish. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function handleTool(e: Extract<ChatEvent, { t: "tool" }>) {
     const id = e.jobId;
     if (id) demoActions.chatSet({ focusJob: id });
     switch (e.name) {
       case "search_jobs":
+        if (e.localQuery) return void runLocalSearch(e.localQuery);
         return runSearch(false, true, e.search);
       case "prepare_application":
         return id && card({ type: "apply", jobId: id });
@@ -901,7 +933,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
                   />{" "}
                   Connected to Claude
                 </span>
-                Typed messages go to Claude; buttons and cards work as before.
+                {localHelper
+                  ? "Searches run from your computer (local app found); Claude rates and tailors here."
+                  : "Typed messages go to Claude; buttons and cards work as before."}
               </>
             ) : (
               <>

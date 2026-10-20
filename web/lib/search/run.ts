@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { searchAdzuna, searchJobBank, searchJooble, searchLinkedIn } from "./portals";
-import type { LiveSearch, Posting, ScoredPosting } from "./types";
+import type { LiveSearch, PortalResult, Posting, ScoredPosting } from "./types";
 
 // One live search: every portal in parallel → drop duplicates and jobs already seen →
 // a keyword pre-filter picks the most relevant few → Claude rates those against the profile.
@@ -62,12 +62,15 @@ export async function liveSearch(input: {
   cities: string[];
   profile: SearchProfile;
   seen: string[];
+  /** Portal results found elsewhere (the person's own computer); when given, nothing is fetched here */
+  provided?: PortalResult[];
 }): Promise<LiveSearch> {
   const roles = input.roles.filter(Boolean).slice(0, 2);
   const cities = input.cities.filter(Boolean).slice(0, 2);
   const q = { roles: roles.length ? roles : ["data analyst"], cities, days: 14 };
 
-  const results = await Promise.all([searchJobBank(q), searchLinkedIn(q), searchAdzuna(q), searchJooble(q)]);
+  const results =
+    input.provided ?? (await Promise.all([searchJobBank(q), searchLinkedIn(q), searchAdzuna(q), searchJooble(q)]));
 
   // Duplicates: same id, or the same title at the same employer on another portal.
   const seen = new Set(input.seen);

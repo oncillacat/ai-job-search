@@ -63,6 +63,8 @@ interface Body {
     prefs?: { roles: string[]; cities: string[] };
     /** Claude read this person's own CV: the sample jobs and applications aren't theirs */
     ownCv?: boolean;
+    /** The person's computer runs the search (the local helper is reachable from their browser) */
+    localSearch?: boolean;
     /** Real postings the person saved */
     saved?: SavedPosting[];
     /** Real postings from recent searches, so Claude can prepare one by id */
@@ -86,7 +88,16 @@ interface SavedPosting {
 
 export type ChatEvent =
   | { t: "text"; v: string }
-  | { t: "tool"; name: ToolName; jobId?: string; status?: Status; search?: LiveSearch; postingId?: string }
+  | {
+      t: "tool";
+      name: ToolName;
+      jobId?: string;
+      status?: Status;
+      search?: LiveSearch;
+      postingId?: string;
+      /** Run this search on the person's computer, then show the rated results */
+      localQuery?: { roles: string[]; cities: string[] };
+    }
   | { t: "progress"; v: string }
   | { t: "error"; v: string }
   | { t: "done" };
@@ -140,6 +151,7 @@ function validate(raw: unknown): Body | null {
     seen: strings(b.state.seen, 3000),
     prefs: { roles: strings(prefs?.roles, 4), cities: strings(prefs?.cities, 4) },
     ownCv: b.state.ownCv === true,
+    localSearch: b.state.localSearch === true,
     saved,
   };
   return { messages, profile: b.profile ?? null, state };
@@ -199,10 +211,16 @@ function encouragement(body: Body, searchCount: { n: number }, searched: number)
     : null;
 }
 
-async function runLiveSearch(body: Body, searchCount: { n: number; seen: string[] }) {
+/** The roles and cities to search: the confirmed preferences, else what Claude read from the CV. */
+function searchQuery(body: Body) {
   const p = (body.profile ?? {}) as { targetRoles?: string[]; targetCities?: string[] } & Parameters<typeof liveSearch>[0]["profile"];
   const roles = body.state.prefs?.roles.length ? body.state.prefs.roles : (p.targetRoles ?? []);
   const cities = body.state.prefs?.cities.length ? body.state.prefs.cities : (p.targetCities ?? []);
+  return { p, roles: roles.slice(0, 2), cities: cities.slice(0, 2) };
+}
+
+async function runLiveSearch(body: Body, searchCount: { n: number; seen: string[] }) {
+  const { p, roles, cities } = searchQuery(body);
   const search = await liveSearch({ roles, cities, profile: p, seen: [...(body.state.seen ?? []), ...searchCount.seen] });
   searchCount.n += 1;
   searchCount.seen.push(...search.seenIds);
@@ -241,13 +259,22 @@ async function runTool(
   input: Record<string, unknown>,
   body: Body,
   searchCount: { n: number; seen: string[] },
-): Promise<{ ok: boolean; text: string; search?: LiveSearch }> {
+): Promise<{ ok: boolean; text: string; search?: LiveSearch; localQuery?: { roles: string[]; cities: string[] } }> {
   const jobId = typeof input.job_id === "string" ? input.job_id : undefined;
   const job = jobId ? await getJob(jobId) : null;
   if (name !== "search_jobs" && name !== "prepare_posting" && !job) return { ok: false, text: "Unknown job_id." };
 
   switch (name) {
     case "search_jobs": {
+      if (body.state.localSearch === true) {
+        const { roles, cities } = searchQuery(body);
+        searchCount.n += 1;
+        return {
+          ok: true,
+          localQuery: { roles, cities },
+          text: "The search is running on the person's own computer now and its results card will appear by itself in about a minute, with the numbers and the matches. Say one short sentence that it's searching; don't guess any results.",
+        };
+      }
       if (process.env.LIVE_SEARCH !== "0") return runLiveSearch(body, searchCount);
       const rounds = await getSearchRounds();
       const r = rounds[Math.min(body.state.searchesDone + searchCount.n, rounds.length - 1)];
@@ -437,7 +464,7 @@ export async function POST(request: Request) {
               });
               continue;
             }
-            if (name === "search_jobs" && process.env.LIVE_SEARCH !== "0") {
+            if (name === "search_jobs" && process.env.LIVE_SEARCH !== "0" && body!.state.localSearch !== true) {
               send({ t: "progress", v: "Searching the job boards and reading the closest matches. This takes about a minute." });
             }
             const out = await runTool(name, input, body!, searchCount);
@@ -448,6 +475,7 @@ export async function POST(request: Request) {
                 jobId: typeof input.job_id === "string" ? input.job_id : undefined,
                 status: name === "update_status" ? (input.status as Status) : undefined,
                 search: out.search,
+                localQuery: out.localQuery,
                 postingId: name === "prepare_posting" ? String(input.posting_id) : undefined,
               });
             }

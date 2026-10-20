@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   if (!access.ok) return Response.json({ message: access.message }, { status: access.status });
   const raw = await request.text();
   if (raw.length > 200_000) return Response.json({ message: "That request is too large." }, { status: 413 });
-  let body: { posting?: unknown; profile?: unknown } = {};
+  let body: { posting?: unknown; profile?: unknown; detail?: unknown } = {};
   try {
     body = JSON.parse(raw) as typeof body;
   } catch {
@@ -90,7 +90,16 @@ export async function POST(request: Request) {
   const posting = validPosting(body.posting);
   if (!posting || !body.profile) return Response.json({ message: "I need a posting and your profile." }, { status: 400 });
 
-  const detail = await postingDetail(posting);
+  // The full posting, read on the person's computer (local helper) when given; else fetched here.
+  const given = body.detail as { text?: unknown; full?: unknown; applyUrl?: unknown } | null | undefined;
+  const detail =
+    given && typeof given.text === "string"
+      ? {
+          text: given.text.slice(0, 12000),
+          full: given.full === true,
+          applyUrl: typeof given.applyUrl === "string" && /^https:\/\//.test(given.applyUrl) ? given.applyUrl.slice(0, 600) : undefined,
+        }
+      : await postingDetail(posting);
   const postingText = JSON.stringify({
     title: posting.title,
     company: posting.company,

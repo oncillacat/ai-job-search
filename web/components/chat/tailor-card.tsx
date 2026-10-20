@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { TailoredApplication, TailorResponse } from "@/app/api/tailor/route";
 import { demoActions, getDemoState, useDemoState, type ChatCard } from "@/lib/state/demo-store";
 import { saveFile } from "@/lib/state/local-files";
+import { detailFromThisComputer } from "@/lib/state/local-helper";
 import { Box, btnGhost, btnPrimary, btnQuiet, CopyButton } from "./chat-cards";
 import { CvPreview, plainText } from "./cv-document";
 import { downloadPdf } from "./pdf-export";
@@ -75,11 +76,15 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
     inFlight.add(itemId);
     const timers = steps.map((_, i) => setTimeout(() => setStep((s) => Math.max(s, i)), [0, 6000, 18000][i]));
     const s = getDemoState();
-    fetch("/api/tailor", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ posting: p, profile: s.profile }),
-    })
+    // On the shared site, read the full posting from this computer when the local helper runs.
+    detailFromThisComputer(p)
+      .then((detail) =>
+        fetch("/api/tailor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ posting: p, profile: s.profile, detail }),
+        }),
+      )
       .then(async (res) => {
         const out = (await res.json()) as Partial<TailorResponse> & { message?: string };
         if (!res.ok || !out.result) throw new Error(out.message ?? "I couldn't prepare this one.");
