@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import Link from "next/link";
+import { createContext, useContext, type ReactNode } from "react";
 import type { Application } from "@/lib/data";
 import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
 import { useDemoState } from "@/lib/state/demo-store";
@@ -13,6 +14,64 @@ import { Panel, RunsChart, StackedBar } from "./dashboard-charts";
 
 const day = (iso: string) =>
   new Date(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+
+// "Real mode": Claude is connected (or the person's own CV was read), so the demo's sample
+// person never appears. The dashboard then starts blank and fills in from real searches only.
+const RealMode = createContext(false);
+
+export function RealModeProvider({
+  live,
+  children,
+}: {
+  live: boolean;
+  children: ReactNode;
+}) {
+  return <RealMode.Provider value={live}>{children}</RealMode.Provider>;
+}
+
+function useReal() {
+  const { chat } = useDemoState();
+  return useContext(RealMode) || !!chat.ownCv;
+}
+
+/** In real mode, a blank page until the first real search; otherwise the dashboard. */
+export function DashboardGate({ children }: { children: ReactNode }) {
+  const real = useReal();
+  const live = useLive();
+  if (!real || live) return children;
+  return (
+    <div className="border border-line bg-surface px-6 py-10 text-center sm:px-10">
+      <p className="font-display text-xl">Nothing here yet.</p>
+      <p className="mx-auto mt-2 max-w-prose text-muted">
+        Your dashboard fills in from your own searches. Upload your CV in the
+        chat and run your first search; the postings, matches and applications
+        will show up here.
+      </p>
+      <Link
+        href="/chat"
+        className="mt-5 inline-block bg-sage px-4 py-2 text-[15px] font-medium text-sage-ink hover:opacity-90"
+      >
+        Go to the chat
+      </Link>
+    </div>
+  );
+}
+
+/** Header text: nothing about sample numbers in real mode before the first search. */
+export function RealHeader({ children }: { children: ReactNode }) {
+  const real = useReal();
+  const live = useLive();
+  if (real && !live)
+    return <>Where your applications stand, and the work done for you.</>;
+  return <LiveHeaderText>{children}</LiveHeaderText>;
+}
+
+export function RealUpdated({ children }: { children: ReactNode }) {
+  const real = useReal();
+  const live = useLive();
+  if (real && !live) return null;
+  return <LiveUpdated>{children}</LiveUpdated>;
+}
 
 function useLive() {
   const { chat } = useDemoState();
@@ -105,11 +164,12 @@ export function LiveOverview({
   children: ReactNode;
 }) {
   const live = useLive();
+  const real = useReal();
   if (!live) return children;
   return (
     <>
       <SummaryTiles
-        applications={applications}
+        applications={real ? [] : applications}
         recorded={live.recorded}
         ranked={live.rated}
       />
@@ -285,14 +345,14 @@ export function SampleOnly({
   empty: ReactNode;
   children: ReactNode;
 }) {
-  const { chat } = useDemoState();
-  return chat.ownCv ? empty : children;
+  return useReal() ? empty : children;
 }
 
 /** For a person with their own CV: the real postings they saved, in place of the sample applications. */
 export function OwnSaved({ children }: { children: ReactNode }) {
   const { chat } = useDemoState();
-  if (!chat.ownCv) return children;
+  const real = useReal();
+  if (!real) return children;
   const saved = chat.saved ?? [];
   return saved.length ? (
     <>

@@ -58,6 +58,8 @@ export function ChatDemo({ data }: { data: ChatData }) {
     null,
   );
   const [busy, setBusy] = useState(false);
+  /** Same as `live?.on`, readable inside handlers without waiting for a re-render. */
+  const liveRef = useRef(false);
   /** The server was rebuilt after this page loaded: new features need a reload. */
   const [stale, setStale] = useState(false);
 
@@ -75,6 +77,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
       .then((d) => {
         if (cancelled) return;
         setLive({ on: d.live, reason: d.reason });
+        liveRef.current = d.live;
         if (d.build && d.build !== process.env.NEXT_PUBLIC_BUILD_STAMP)
           setStale(true);
       })
@@ -109,7 +112,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const d = s.decisions[jobId];
     if (d) return d.decision;
     // The sample applications belong to the sample person, not to someone who uploaded their own CV.
-    if (s.chat.ownCv) return null;
+    if (s.chat.ownCv || liveRef.current) return null;
     const app = data.applications.find((a) => a.jobId === jobId);
     if (!app) return null;
     return app.status === "closed" ? "rejected" : app.status;
@@ -141,7 +144,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const d = s.decisions[jobId];
     if (d?.decision === "applied")
       return Math.floor((Date.now() - Date.parse(d.at)) / 864e5);
-    return s.chat.ownCv ? undefined : data.daysSinceApplied[jobId];
+    return s.chat.ownCv || liveRef.current ? undefined : data.daysSinceApplied[jobId];
   }
 
   function raiseCheckIns() {
@@ -482,7 +485,8 @@ export function ChatDemo({ data }: { data: ChatData }) {
             focusJob: s.chat.focusJob,
             seen: s.chat.seenJobs,
             prefs: confirmedPrefs(),
-            ownCv: s.chat.ownCv === true,
+            // With Claude connected there is no sample person: everything is this person's own.
+            ownCv: true,
             recent: [...knownPostings().values()].slice(-40).map((x) => ({
               posting_id: x.id,
               title: x.title,
