@@ -12,7 +12,6 @@ set -euo pipefail
 NODE_DIR="${1:?Pass the unpacked Node.js darwin-arm64 folder}"
 WEB="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${2:-$WEB/../dist}"
-SHARED_SITE="https://ai-job-search-phi.vercel.app"
 APP_NAME="AI Job Search"
 VERSION="$(node -p "require('$WEB/package.json').version")"
 
@@ -20,23 +19,11 @@ VERSION="$(node -p "require('$WEB/package.json').version")"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-echo "1/5 Clean copy of the code"
-rsync -a --exclude node_modules --exclude .next --exclude '.env*' --exclude .vercel \
-  --exclude tsconfig.tsbuildinfo --exclude scripts "$WEB/" "$WORK/src/"
+echo "1/4 Build the server (clean copy, self-contained)"
+"$WEB/scripts/build-standalone.sh" "$WORK/standalone"
+STANDALONE="$WORK/standalone"
 
-echo "2/5 Install and build (self-contained server)"
-cd "$WORK/src"
-# Nothing from this shell's Claude settings may reach the build.
-for v in $(env | grep -oE '^ANTHROPIC_[A-Z_]+'); do unset "$v"; done
-npm ci --no-audit --no-fund >/dev/null
-# REMOTE_* here only tell the pages that Claude is available (no sample person); the real access
-# code is entered on each Mac. This placeholder is never used to call anything.
-BUILD_STANDALONE=1 REMOTE_SITE="$SHARED_SITE" REMOTE_ACCESS_CODE="set-on-each-mac" npm run build >/dev/null
-STANDALONE="$WORK/src/.next/standalone"
-cp -R .next/static "$STANDALONE/.next/static"
-cp -R public "$STANDALONE/public"
-
-echo "3/5 Assemble the app"
+echo "2/4 Assemble the app"
 APP="$WORK/$APP_NAME.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp -R "$STANDALONE" "$APP/Contents/Resources/app"
@@ -64,14 +51,10 @@ PLIST
 [ -f "$WEB/scripts/AppIcon.icns" ] && cp "$WEB/scripts/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns" && \
   /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP/Contents/Info.plist"
 
-# Check no key slipped in (a real key: the prefix, its type, then a long secret).
-if grep -rIlE "sk-ant-[a-z0-9]+-[A-Za-z0-9_-]{30,}" "$APP" >/dev/null 2>&1; then
-  echo "An API key was found inside the app. Stopping."; exit 1
-fi
 # Ad-hoc signature (Apple Silicon needs code to be signed; this isn't a Developer ID).
 codesign --force --deep --sign - "$APP" >/dev/null
 
-echo "4/5 Disk image"
+echo "3/4 Disk image"
 DMG_DIR="$WORK/dmg"
 mkdir -p "$DMG_DIR"
 mv "$APP" "$DMG_DIR/"
@@ -96,4 +79,4 @@ DMG="$OUT/AI-Job-Search-$VERSION-arm64.dmg"
 rm -f "$DMG"
 hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_DIR" -ov -format UDZO "$DMG" >/dev/null
 
-echo "5/5 Done: $DMG ($(du -h "$DMG" | cut -f1))"
+echo "4/4 Done: $DMG ($(du -h "$DMG" | cut -f1))"

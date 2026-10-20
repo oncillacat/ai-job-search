@@ -10,8 +10,6 @@ and again, so it aims to do the repetitive work quietly and show only what matte
 Built on the [ai-job-search](https://github.com/MadsLorentzen/ai-job-search) framework (MIT) by Mads Lorentzen. The
 job-site clients in `lib/search/` are ported from that repo's command-line tools.
 
-- **Mac app:** [download page](https://ai-job-search-phi.vercel.app/download) ·
-  [release](https://github.com/oncillacat/ai-job-search/releases/tag/mac-app-v0.1.0)
 - **Shared site:** https://ai-job-search-phi.vercel.app (Claude features need an access code)
 
 ## What it does
@@ -28,14 +26,14 @@ job-site clients in `lib/search/` are ported from that repo's command-line tools
 
 ## Three ways to run it
 
-### 1. The Mac app (recommended)
+### 1. The desktop app (Mac or Windows)
 
-Download the DMG from the [download page](https://ai-job-search-phi.vercel.app/download), drag it into Applications and
-open it. The first time, enter your access code or your own Anthropic API key. The app runs on your Mac, opens in your
-browser, and searches the job sites from your own internet connection, so LinkedIn works.
+Not published for download at the moment; build it from the code (see [Building the desktop apps](#building-the-desktop-apps)).
+Install it, open it, and enter your access code or your own Anthropic API key the first time. The app runs on your
+computer, opens in your browser, and searches the job sites from your own internet connection, so LinkedIn works.
 
-Apple Silicon (M1 or later), macOS 12 or newer. The app isn't signed with an Apple Developer ID, so the first launch
-needs **System Settings → Privacy & Security → Open Anyway**.
+The apps aren't signed by a registered developer, so the first launch needs **System Settings → Privacy & Security →
+Open Anyway** on a Mac, or **More info → Run anyway** in the Windows SmartScreen warning.
 
 ### 2. The shared site
 
@@ -120,36 +118,47 @@ npx vercel deploy --prod
 Set `ANTHROPIC_API_KEY` and `APP_PASSCODE` in the Vercel project, and a monthly spend limit in the Anthropic console
 before sharing the code.
 
-## Building the Mac app
+## Building the desktop apps
 
-Download the official Node.js build for `darwin-arm64` from nodejs.org, unpack it, then:
+Both are built on a Mac from a clean copy of the code (no `.env` files; the build stops if anything shaped like an
+API key ends up inside), and carry the official Node.js runtime so nobody needs Node installed.
 
 ```bash
 cd web
+# Mac (Apple Silicon): unpack node-v24.x.x-darwin-arm64 from nodejs.org first
 scripts/build-mac-app.sh /path/to/node-v24.x.x-darwin-arm64
+# Windows (x64): unpack node-v24.x.x-win-x64 from nodejs.org first; needs NSIS (brew install makensis)
+scripts/build-windows.sh /path/to/node-v24.x.x-win-x64
 ```
 
-The DMG lands in `dist/`. Publish it as a GitHub release and update the link on `app/(marketing)/download/page.tsx`.
+Both land in `dist/`: `AI-Job-Search-<version>-arm64.dmg` and `AI-Job-Search-Setup-<version>-x64.exe`.
+
+- **Mac:** the launcher asks once for the code or key (Keychain), runs the app on 127.0.0.1 and shows an Open / Quit
+  window.
+- **Windows:** a per-user installer (no administrator rights) with Start menu and Desktop shortcuts and an
+  uninstaller. The launcher (PowerShell) keeps keys encrypted with Windows Data Protection for the user's account.
+  Not yet tried on a Windows PC.
 
 ## Project layout
 
 ```
 web/
-  app/(marketing)/      landing, privacy, download, access-code pages
+  app/(marketing)/      landing, privacy, desktop-app, access-code pages
   app/(app)/            chat, dashboard, profile, settings
   app/api/              chat, profile, search, tailor, access; api/local/* for the local app only
   components/chat/      chat, cards, tailoring, PDF export
   lib/search/           job sites, full postings, search and rating
   lib/access.ts         access code; lib/remote.ts connected local app; lib/secrets.ts Keychain
   lib/state/            browser state, private file storage, keys
-  scripts/              start.command, build-mac-app.sh, mac-launcher.sh, app icon
+  scripts/              start.command; build-standalone.sh, build-mac-app.sh, build-windows.sh;
+                        mac-launcher.sh, windows-launcher.ps1, windows-installer.nsi; app icons
   docs/plan-chat-first.md   the product plan
 ```
 
 ## Not yet
 
 - Real sign-in and per-person accounts (planned with Supabase), so data can follow you between devices.
-- Intel Macs, Windows, and a signed, notarised Mac app.
+- Intel Macs, a tested Windows build, and signed apps (Apple Developer ID, Windows code signing).
 - An automatic daily search.
 
 ## Licence

@@ -4,7 +4,6 @@
 > (LinkedIn included, from your own computer), rates the matches honestly and prepares a tailored CV and cover letter
 > for you to review and send.
 >
-> - **Download for Mac:** [download page and instructions](https://ai-job-search-phi.vercel.app/download)
 > - **Shared site:** https://ai-job-search-phi.vercel.app (Claude features need an access code)
 > - **Docs and code:** [`web/README.md`](web/README.md)
 >

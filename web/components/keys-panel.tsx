@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { deleteKey, localKeys, saveKey, type KeyName, type KeyStatus } from "@/lib/state/keys";
+import {
+  deleteKey,
+  localKeys,
+  saveKey,
+  storeName,
+  type KeyName,
+  type KeyStatus,
+} from "@/lib/state/keys";
 import { Button, Card } from "./ui";
 
 // Settings → Keys and access, in the app on this computer only. Keys are saved in the macOS
@@ -18,19 +25,34 @@ const FIELDS: { name: KeyName; label: string; hint: string }[] = [
     label: "Access code for the shared site",
     hint: "Instead of your own key: use Claude through the shared site with the code you were given.",
   },
-  { name: "ADZUNA_APP_ID", label: "Adzuna app ID (optional)", hint: "More job postings. Free at developer.adzuna.com." },
-  { name: "ADZUNA_APP_KEY", label: "Adzuna app key (optional)", hint: "Goes with the app ID above." },
-  { name: "JOOBLE_API_KEY", label: "Jooble API key (optional)", hint: "More job postings. Free from jooble.org/api/about." },
+  {
+    name: "ADZUNA_APP_ID",
+    label: "Adzuna app ID (optional)",
+    hint: "More job postings. Free at developer.adzuna.com.",
+  },
+  {
+    name: "ADZUNA_APP_KEY",
+    label: "Adzuna app key (optional)",
+    hint: "Goes with the app ID above.",
+  },
+  {
+    name: "JOOBLE_API_KEY",
+    label: "Jooble API key (optional)",
+    hint: "More job postings. Free from jooble.org/api/about.",
+  },
 ];
 
 export function KeysPanel() {
   const [status, setStatus] = useState<KeyStatus | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [store, setStore] = useState<"keychain" | "windows">();
 
   const refresh = () =>
     void localKeys().then((r) => {
-      if (r) setStatus(r.keys);
-      else setUnavailable(true);
+      if (r) {
+        setStatus(r.keys);
+        setStore(r.store);
+      } else setUnavailable(true);
     });
   useEffect(refresh, []);
 
@@ -40,8 +62,10 @@ export function KeysPanel() {
       <div>
         <h2 className="font-display text-xl">Keys and access</h2>
         <p className="mt-1 text-muted">
-          Saved in your Mac&apos;s Keychain, not in a file. Your own API key stays on this Mac; the access code is only
-          sent to the shared site to sign in. You need one of the two; your own key is used when both are set.
+          Saved in {storeName(store)}, never as plain text. Your own API key
+          stays on this computer; the access code is only sent to the shared
+          site to sign in. You need one of the two; your own key is used when
+          both are set.
         </p>
       </div>
       {!status ? (
@@ -49,7 +73,12 @@ export function KeysPanel() {
       ) : (
         <div className="space-y-5">
           {FIELDS.map((f) => (
-            <KeyField key={f.name} field={f} state={status[f.name]} onChange={refresh} />
+            <KeyField
+              key={f.name}
+              field={f}
+              state={status[f.name]}
+              onChange={refresh}
+            />
           ))}
         </div>
       )}
@@ -95,7 +124,9 @@ function KeyField({
             autoComplete="off"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder={state.set ? "Paste a new one to replace it" : "Paste it here"}
+            placeholder={
+              state.set ? "Paste a new one to replace it" : "Paste it here"
+            }
             className="min-w-0 flex-1 border border-line bg-surface px-3 py-2 text-[15px] font-normal"
           />
           <Button type="submit" disabled={!value.trim() || saving}>

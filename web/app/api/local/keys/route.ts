@@ -25,7 +25,11 @@ export async function GET(request: Request) {
       return [n, v ? { set: true, hint: v.length > 8 ? `…${v.slice(-4)}` : "set" } : { set: false }];
     }),
   );
-  return Response.json({ keys, remoteSite: process.env.REMOTE_SITE ?? null });
+  return Response.json({
+    keys,
+    remoteSite: process.env.REMOTE_SITE ?? null,
+    store: process.platform === "win32" ? "windows" : "keychain",
+  });
 }
 
 export async function POST(request: Request) {
@@ -41,7 +45,7 @@ export async function POST(request: Request) {
     return Response.json({ message: "Anthropic API keys start with sk-ant-." }, { status: 400 });
   }
   if (!(await saveSecret(body.name, value))) {
-    return Response.json({ message: "Couldn't save it to the Keychain." }, { status: 500 });
+    return Response.json({ message: "Couldn't save it on this computer." }, { status: 500 });
   }
   if (body.name === "REMOTE_ACCESS_CODE" && !process.env.REMOTE_SITE) {
     process.env.REMOTE_SITE = "https://ai-job-search-phi.vercel.app";

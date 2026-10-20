@@ -54,13 +54,6 @@ export default function Home() {
           <div className="mt-10 flex flex-wrap gap-3">
             <ButtonLink href="/chat">Start chatting</ButtonLink>
             <ButtonLink
-              href="/download"
-              variant="quiet"
-              className="!bg-surface hover:!bg-surface/80"
-            >
-              Download for Mac
-            </ButtonLink>
-            <ButtonLink
               href="/dashboard"
               variant="quiet"
               className="!bg-surface hover:!bg-surface/80"
