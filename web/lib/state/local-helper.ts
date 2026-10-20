@@ -32,7 +32,11 @@ export async function searchFromThisComputer(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...input, results }),
   });
-  const out = (await res.json().catch(() => ({}))) as { search?: LiveSearch; message?: string };
-  if (!res.ok || !out.search) throw new Error(out.message ?? "I couldn't rate the postings. Try again.");
+  const out = (await res.json().catch(() => ({}))) as { search?: LiveSearch; message?: string; code?: string };
+  if (!res.ok || !out.search) {
+    throw Object.assign(new Error(out.message ?? "I couldn't rate the postings. Try again."), {
+      code: res.status === 401 || out.code === "auth" ? "auth" : undefined,
+    });
+  }
   return out.search;
 }

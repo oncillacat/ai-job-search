@@ -32,6 +32,8 @@ import type { ChatEvent } from "@/app/api/chat/route";
 import type { ExtractedProfile } from "@/app/api/profile/route";
 import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
 import { TailorCard } from "./tailor-card";
+import { KeyNeededCard } from "./key-card";
+import { localKeys } from "@/lib/state/keys";
 import { onSharedSite, searchFromThisComputer } from "@/lib/state/local-helper";
 
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
@@ -413,6 +415,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
             }]`
           : "",
       interview: `[Showed interview prep${job}]`,
+      keyNeeded: "[Asked for a new API key or access code]",
       note: "",
     };
     parts.push(note[c.type]);
@@ -529,7 +532,13 @@ export function ChatDemo({ data }: { data: ChatData }) {
       if (!res.ok || !res.body) {
         const err = (await res.json().catch(() => null)) as {
           message?: string;
+          code?: string;
         } | null;
+        if (
+          (res.status === 401 || err?.code === "auth") &&
+          (await askForKey(q))
+        )
+          return;
         say(err?.message ?? "Something went wrong. Try again.");
         return;
       }
@@ -566,7 +575,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
             progress = null;
             handleTool(e);
           } else if (e.t === "error") {
-            say(e.v);
+            if (!(e.code === "auth" && (await askForKey(q)))) say(e.v);
           }
         }
       }
@@ -596,6 +605,10 @@ export function ChatDemo({ data }: { data: ChatData }) {
       demoActions.chatRemove(progress);
       runSearch(false, true, search);
     } catch (err) {
+      if ((err as { code?: string }).code === "auth" && (await askForKey())) {
+        demoActions.chatRemove(progress);
+        return;
+      }
       demoActions.chatSetText(
         progress,
         err instanceof Error
@@ -605,6 +618,16 @@ export function ChatDemo({ data }: { data: ChatData }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * In the app on this computer, a rejected key or access code: ask for a new one in the chat.
+   * Returns false on the shared site (no keys there), so the caller shows the message instead.
+   */
+  async function askForKey(retry?: string) {
+    if (!(await localKeys())) return false;
+    card({ type: "keyNeeded", retry });
+    return true;
   }
 
   function handleTool(e: Extract<ChatEvent, { t: "tool" }>) {
@@ -666,7 +689,13 @@ export function ChatDemo({ data }: { data: ChatData }) {
       const out = (await res.json()) as {
         profile?: ExtractedProfile;
         message?: string;
+        code?: string;
       };
+      if ((res.status === 401 || out.code === "auth") && (await askForKey())) {
+        demoActions.chatRemove(progress);
+        demoActions.chatUpdateCard(uploadItemId, { done: false });
+        return;
+      }
       if (!res.ok || !out.profile)
         return reopen(out.message ?? "I couldn't read that CV.");
       const p = out.profile;
@@ -895,6 +924,17 @@ export function ChatDemo({ data }: { data: ChatData }) {
         );
       case "tailor":
         return <TailorCard card={c} itemId={item.id} />;
+      case "keyNeeded":
+        return (
+          <KeyNeededCard
+            card={c}
+            onSaved={() => {
+              demoActions.chatUpdateCard(item.id, { done: true });
+              if (c.retry) void askClaude(c.retry, false);
+              else say("Saved. Try that again now.");
+            }}
+          />
+        );
       case "picker":
         return (
           <PickerCard

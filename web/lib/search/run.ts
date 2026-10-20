@@ -171,7 +171,9 @@ async function score(postings: Posting[], profile: SearchProfile, roles: string[
       const n = Math.max(0, Math.min(100, Math.round(s.score)));
       return [{ ...p, score: n, fit: n >= 75 ? "high" : n >= 50 ? "medium" : "low", reason: s.reason, gaps: s.gaps.slice(0, 3) } as ScoredPosting];
     });
-  } catch {
+  } catch (err) {
+    // A rejected key must reach the person (they're asked for a new one); other failures don't.
+    if (err instanceof Anthropic.AuthenticationError) throw err;
     // Scoring failed: show the closest postings unrated rather than nothing.
     return postings.slice(0, 10).map((p) => ({ ...p, score: 0, fit: "medium", reason: "I couldn't rate this one; have a look yourself.", gaps: [] }));
   }

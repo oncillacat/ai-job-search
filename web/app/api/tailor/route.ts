@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { loadSecrets } from "@/lib/secrets";
 import { liveAllowed } from "@/lib/access";
 import { forward, remoteSite } from "@/lib/remote";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
@@ -78,6 +79,7 @@ function validPosting(raw: unknown): Posting | null {
 }
 
 export async function POST(request: Request) {
+  await loadSecrets();
   // Connected local app: read the full posting here (this computer's internet), tailor on the shared site.
   const remote = remoteSite();
   if (remote) {
@@ -88,7 +90,11 @@ export async function POST(request: Request) {
     return forward(remote, "/api/tailor", { method: "POST", body: JSON.stringify(body) });
   }
   const access = await liveAllowed(request);
-  if (!access.ok) return Response.json({ message: access.message }, { status: access.status });
+  if (!access.ok)
+    return Response.json(
+      { message: access.message, code: access.status === 401 ? "auth" : undefined },
+      { status: access.status },
+    );
   const raw = await request.text();
   if (raw.length > 200_000) return Response.json({ message: "That request is too large." }, { status: 413 });
   let body: { posting?: unknown; profile?: unknown; detail?: unknown } = {};
@@ -144,12 +150,13 @@ export async function POST(request: Request) {
   } catch (err) {
     const message =
       err instanceof Anthropic.AuthenticationError
-        ? "The API key was rejected. Check ANTHROPIC_API_KEY in web/.env.local."
+        ? "The API key was rejected."
         : err instanceof Anthropic.RateLimitError
           ? "Too many requests right now. Wait a minute and try again."
           : err instanceof Anthropic.APIConnectionError
             ? "Couldn't reach Claude. Check your connection."
             : "Something went wrong while preparing this. Try again.";
-    return Response.json({ message }, { status: 502 });
+    const auth = err instanceof Anthropic.AuthenticationError;
+    return Response.json({ message, code: auth ? "auth" : undefined }, { status: auth ? 401 : 502 });
   }
 }

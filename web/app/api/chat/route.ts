@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { loadSecrets } from "@/lib/secrets";
 import { liveAllowed } from "@/lib/access";
 import { forward, remoteSite } from "@/lib/remote";
 import {
@@ -100,7 +101,7 @@ export type ChatEvent =
       localQuery?: { roles: string[]; cities: string[] };
     }
   | { t: "progress"; v: string }
-  | { t: "error"; v: string }
+  | { t: "error"; v: string; code?: "auth" }
   | { t: "done" };
 
 type ToolName =
@@ -341,6 +342,7 @@ async function runTool(
 }
 
 export async function POST(request: Request) {
+  await loadSecrets();
   // Connected local app: Claude runs on the shared site, but the search runs here, on this computer.
   const remote = remoteSite();
   if (remote) {
@@ -355,7 +357,11 @@ export async function POST(request: Request) {
     return forward(remote, "/api/chat", { method: "POST", body: JSON.stringify(body) });
   }
   const access = await liveAllowed(request);
-  if (!access.ok) return Response.json({ error: "disabled", message: access.message }, { status: access.status });
+  if (!access.ok)
+    return Response.json(
+      { error: "disabled", message: access.message, code: access.status === 401 ? "auth" : undefined },
+      { status: access.status },
+    );
   const raw = await request.text();
   if (raw.length > MAX_BODY) return Response.json({ error: "too_large" }, { status: 413 });
   let body: Body | null = null;
@@ -500,13 +506,13 @@ export async function POST(request: Request) {
       } catch (err) {
         const msg =
           err instanceof Anthropic.AuthenticationError
-            ? "The API key was rejected. Check ANTHROPIC_API_KEY in web/.env.local."
+            ? "The API key was rejected."
             : err instanceof Anthropic.RateLimitError
               ? "Too many requests right now. Wait a minute and try again."
               : err instanceof Anthropic.APIConnectionError
                 ? "Couldn't reach Claude. Check your connection."
                 : "Something went wrong while answering. Try again.";
-        send({ t: "error", v: msg });
+        send({ t: "error", v: msg, code: err instanceof Anthropic.AuthenticationError ? "auth" : undefined });
       } finally {
         send({ t: "done" });
         controller.close();
@@ -525,6 +531,7 @@ export async function POST(request: Request) {
 
 /** Lets the chat page show whether live Claude is available, without spending tokens. */
 export async function GET(request: Request) {
+  await loadSecrets();
   const remote = remoteSite();
   if (remote) {
     const res = await forward(remote, "/api/chat", { method: "GET" });

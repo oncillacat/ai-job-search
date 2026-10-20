@@ -1,4 +1,5 @@
 import { helperDisabled, helperHeaders, helperPreflight } from "@/lib/local-helper-cors";
+import { loadSecrets } from "@/lib/secrets";
 import { searchAdzuna, searchJobBank, searchJooble, searchLinkedIn } from "@/lib/search/portals";
 
 // Local search helper: searches the job sites from this computer and returns the raw postings.
@@ -22,6 +23,7 @@ const strings = (v: unknown, max: number) =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => x.slice(0, 80)).slice(0, max) : [];
 
 export async function POST(request: Request) {
+  await loadSecrets(); // Adzuna and Jooble keys
   if (helperDisabled()) return new Response(null, { status: 404 });
   const h = helperHeaders(request);
   if (!h) return new Response(null, { status: 403 });

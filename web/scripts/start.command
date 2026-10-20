@@ -55,7 +55,8 @@ if [ ! -f .next/BUILD_ID ] || [ -n "$(find app components lib proxy.ts next.conf
   npm run build >/dev/null || { echo "Build failed."; pause; exit 1; }
 fi
 
-npx next start -p "$PORT" &
+# Only this computer can reach it (not others on the same Wi-Fi).
+npx next start -p "$PORT" -H 127.0.0.1 &
 APP=$!
 trap 'kill $APP 2>/dev/null' EXIT INT TERM
 

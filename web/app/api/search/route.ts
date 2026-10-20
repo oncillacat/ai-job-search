@@ -1,4 +1,6 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { liveAllowed } from "@/lib/access";
+import { loadSecrets } from "@/lib/secrets";
 import { forward, remoteSite } from "@/lib/remote";
 import { liveSearch, type SearchProfile } from "@/lib/search/run";
 import type { PortalResult, Posting } from "@/lib/search/types";
@@ -50,11 +52,16 @@ function cleanResults(raw: unknown): PortalResult[] {
 }
 
 export async function POST(request: Request) {
+  await loadSecrets();
   // Connected local app: Claude runs on the shared site.
   const remote = remoteSite();
   if (remote) return forward(remote, "/api/search", { method: "POST", body: await request.text() });
   const access = await liveAllowed(request);
-  if (!access.ok) return Response.json({ message: access.message }, { status: access.status });
+  if (!access.ok)
+    return Response.json(
+      { message: access.message, code: access.status === 401 ? "auth" : undefined },
+      { status: access.status },
+    );
   const raw = await request.text();
   if (raw.length > 1_000_000) return Response.json({ message: "That search is too large." }, { status: 413 });
   let body: Record<string, unknown> = {};
@@ -74,7 +81,10 @@ export async function POST(request: Request) {
       provided: results,
     });
     return Response.json({ search });
-  } catch {
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) {
+      return Response.json({ message: "The API key was rejected.", code: "auth" }, { status: 401 });
+    }
     return Response.json({ message: "Something went wrong while rating the postings. Try again." }, { status: 502 });
   }
 }

@@ -64,7 +64,15 @@ export async function hasAccessCookie(cookieValue: string | undefined) {
 
 /** For route handlers: may this request use Claude? Returns a reason when not. */
 export async function liveAllowed(request: Request): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
-  if (!hasKey()) return { ok: false, status: 503, message: "Add ANTHROPIC_API_KEY to web/.env.local and restart the server." };
+  if (!hasKey()) {
+    return {
+      ok: false,
+      status: 503,
+      message: onVercel()
+        ? "Claude isn't set up on this site yet."
+        : "Add your Anthropic API key or access code in Settings → Keys and access.",
+    };
+  }
   if (!onVercel() || process.env.ALLOW_PUBLIC_CHAT) return { ok: true };
   if (!process.env.APP_PASSCODE) {
     return { ok: false, status: 503, message: "Live features are off on the public demo until sign-in exists." };

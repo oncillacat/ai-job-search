@@ -59,6 +59,12 @@ export type ChatCard =
       cvText?: string;
       letterText?: string;
     }
+  | {
+      /** A saved API key or access code was rejected: ask for a new one, then retry */
+      type: "keyNeeded";
+      retry?: string;
+      done?: boolean;
+    }
   | { type: "note" };
 
 export interface ChatItem {
