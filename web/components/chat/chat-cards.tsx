@@ -15,9 +15,9 @@ const btn =
   "inline-flex items-center justify-center rounded-md px-3.5 py-1.5 text-[14px] font-medium transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-50";
 export const btnPrimary = `${btn} bg-sage text-sage-ink hover:opacity-90`;
 export const btnQuiet = `${btn} bg-surface-2 text-ink hover:bg-line`;
-const btnGhost = `${btn} text-muted hover:bg-surface-2 hover:text-ink`;
+export const btnGhost = `${btn} text-muted hover:bg-surface-2 hover:text-ink`;
 
-function Box({ children, tint }: { children: ReactNode; tint?: "mist" | "sage" | "clay" | "sand" }) {
+export function Box({ children, tint }: { children: ReactNode; tint?: "mist" | "sage" | "clay" | "sand" }) {
   const t =
     tint === "mist"
       ? "bg-mist-soft"
@@ -31,7 +31,7 @@ function Box({ children, tint }: { children: ReactNode; tint?: "mist" | "sage" |
   return <div className={`mt-3 p-4 ${t}`}>{children}</div>;
 }
 
-function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -405,7 +405,16 @@ function JobTable({
 const shortDate = (iso: string) =>
   iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : "—";
 
-export function LiveTable({ rows, onAsk }: { rows: ScoredPosting[]; onAsk?: (p: ScoredPosting) => void }) {
+export function LiveTable({
+  rows,
+  onAsk,
+  onApply,
+}: {
+  rows: ScoredPosting[];
+  onAsk?: (p: ScoredPosting) => void;
+  /** Prepare an application in the chat; without it, Apply links to the chat */
+  onApply?: (p: ScoredPosting) => void;
+}) {
   const { chat } = useDemoState();
   const saved = new Set((chat.saved ?? []).map((x) => x.id));
   return (
@@ -454,6 +463,15 @@ export function LiveTable({ rows, onAsk }: { rows: ScoredPosting[]; onAsk?: (p: 
               </td>
               <td className="whitespace-nowrap px-3 py-2.5">
                 <span className="flex gap-1">
+                  {onApply ? (
+                    <button type="button" className={btnPrimary} onClick={() => onApply(r)}>
+                      Apply
+                    </button>
+                  ) : (
+                    <Link href={`/chat?prepare=${encodeURIComponent(r.id)}`} className={btnPrimary}>
+                      Apply
+                    </Link>
+                  )}
                   {onAsk && (
                     <button type="button" className={btnQuiet} onClick={() => onAsk(r)}>
                       Ask
@@ -479,7 +497,15 @@ export function LiveTable({ rows, onAsk }: { rows: ScoredPosting[]; onAsk?: (p: 
 }
 
 /** Real results from the live search. Claude writes the headline around it. */
-function LiveResults({ live, onAsk }: { live: LiveSearch; onAsk?: (p: ScoredPosting) => void }) {
+function LiveResults({
+  live,
+  onAsk,
+  onApply,
+}: {
+  live: LiveSearch;
+  onAsk?: (p: ScoredPosting) => void;
+  onApply?: (p: ScoredPosting) => void;
+}) {
   const portals = live.sources.filter((s) => s.status === "ok");
   const rows = live.high.length ? live.high : live.medium.slice(0, 10);
   const moreMedium = live.high.length ? live.medium : live.medium.slice(10);
@@ -492,13 +518,13 @@ function LiveResults({ live, onAsk }: { live: LiveSearch; onAsk?: (p: ScoredPost
         new postings · {live.closeLook} read closely · {live.tiers.high} high · {live.tiers.medium} medium · {live.tiers.low} low
       </p>
       {live.notice && <p className="mt-2 border-l-2 border-sand-ink/40 pl-3 text-[14px] text-sand-ink">{live.notice}</p>}
-      {rows.length > 0 && <LiveTable rows={rows} onAsk={onAsk} />}
+      {rows.length > 0 && <LiveTable rows={rows} onAsk={onAsk} onApply={onApply} />}
       {moreMedium.length > 0 && (
         <details className="mt-3">
           <summary className="cursor-pointer text-[14px] text-sage">
             {live.high.length ? `Show the ${moreMedium.length} medium matches` : `Show ${moreMedium.length} more medium matches`}
           </summary>
-          <LiveTable rows={moreMedium} onAsk={onAsk} />
+          <LiveTable rows={moreMedium} onAsk={onAsk} onApply={onApply} />
         </details>
       )}
       <p className="mt-3 text-[14px] text-muted">
@@ -515,14 +541,16 @@ export function SearchCard({
   onApply,
   onAsk,
   onAskLive,
+  onApplyLive,
 }: {
   card: Extract<ChatCard, { type: "search" }>;
   data: ChatData;
   onApply: (jobId: string) => void;
   onAsk: (jobId: string) => void;
   onAskLive?: (p: ScoredPosting) => void;
+  onApplyLive?: (p: ScoredPosting) => void;
 }) {
-  if (card.live) return <LiveResults live={card.live} onAsk={onAskLive} />;
+  if (card.live) return <LiveResults live={card.live} onAsk={onAskLive} onApply={onApplyLive} />;
   const round = data.rounds[Math.min(card.round, data.rounds.length - 1)];
   const searched = round.sources.reduce((n, s) => n + s.count, 0);
   const portals = round.sources.filter((s) => s.count > 0);

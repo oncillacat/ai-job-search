@@ -24,7 +24,8 @@ import type { ChatData } from "./chat-types";
 import { RichText } from "./rich-text";
 import type { ChatEvent } from "@/app/api/chat/route";
 import type { ExtractedProfile } from "@/app/api/profile/route";
-import type { LiveSearch } from "@/lib/search/types";
+import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
+import { TailorCard } from "./tailor-card";
 
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
 // routing in `route()` once sign-in exists; the cards stay the same.
@@ -159,6 +160,21 @@ export function ChatDemo({ data }: { data: ChatData }) {
     if (round === 0 && !live) raiseCheckIns();
   }
 
+  /** All real postings this person has seen results for or saved, by id. */
+  function knownPostings() {
+    const s = getDemoState();
+    const map = new Map<string, ScoredPosting>();
+    for (const i of s.chat.items)
+      if (i.card?.type === "search" && i.card.live) for (const p of [...i.card.live.high, ...i.card.live.medium]) map.set(p.id, p);
+    for (const p of s.chat.saved ?? []) map.set(p.id, p);
+    return map;
+  }
+
+  function startTailor(p: ScoredPosting, echo = true) {
+    if (echo) you(`Prepare my application for ${p.title}${p.company ? ` at ${p.company}` : ""}`);
+    card({ type: "tailor", posting: p });
+  }
+
   function startApply(jobId: string) {
     you(`Apply to ${company(jobId)}`);
     demoActions.chatSet({ focusJob: jobId });
@@ -255,6 +271,16 @@ export function ChatDemo({ data }: { data: ChatData }) {
       checkIn: c.type === "checkIn" ? `[Asked if they heard back${job}${c.done ? `: ${c.done}` : ""}]` : "",
       followUpEmail: `[Showed a follow-up email draft${job}]`,
       kind: "[Offered kind words after a rejection]",
+      tailor:
+        c.type === "tailor"
+          ? `[Prepared an application for ${c.posting.title} at ${c.posting.company} (${c.posting.id}): ${
+              c.result
+                ? `fit ${Math.round(c.result.result.fit.score)}/100, tailored CV, cover letter and form answers shown for review`
+                : c.error
+                  ? `failed: ${c.error}`
+                  : "still preparing"
+            }]`
+          : "",
       interview: `[Showed interview prep${job}]`,
       note: "",
     };
@@ -328,6 +354,13 @@ export function ChatDemo({ data }: { data: ChatData }) {
             seen: s.chat.seenJobs,
             prefs: confirmedPrefs(),
             ownCv: s.chat.ownCv === true,
+            recent: [...knownPostings().values()].slice(-40).map((x) => ({
+              posting_id: x.id,
+              title: x.title,
+              company: x.company,
+              fit: x.fit,
+              score: x.score,
+            })),
             saved: (s.chat.saved ?? []).map((x) => ({
               posting_id: x.id,
               title: x.title,
@@ -401,6 +434,10 @@ export function ChatDemo({ data }: { data: ChatData }) {
         return id && card({ type: "followUpEmail", jobId: id });
       case "interview_prep":
         return id && card({ type: "interview", jobId: id });
+      case "prepare_posting": {
+        const p = e.postingId ? knownPostings().get(e.postingId) : undefined;
+        return p && startTailor(p, false);
+      }
       case "update_status":
         if (id && e.status) demoActions.decide(id, e.status);
         return;
@@ -521,6 +558,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
     }
     if (s.chat.items.some((i) => i.card?.type === "blocker" && i.card.done)) {
       raiseCheckIns();
+      const prepare = params.get("prepare");
+      const posting = prepare ? knownPostings().get(prepare) : undefined;
+      if (posting) startTailor(posting);
       const ask = params.get("ask");
       const apply = params.get("apply");
       if (apply && data.jobs.some((j) => j.id === apply)) startApply(apply);
@@ -602,6 +642,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
             data={data}
             onApply={startApply}
             onAsk={startAsk}
+            onApplyLive={live?.on ? (p) => startTailor(p) : undefined}
             onAskLive={
               live?.on
                 ? (p) => !busy && void askClaude(`Tell me more about ${p.title} at ${p.company || "this employer"}. Is it a good fit for me?`)
@@ -609,6 +650,8 @@ export function ChatDemo({ data }: { data: ChatData }) {
             }
           />
         );
+      case "tailor":
+        return <TailorCard card={c} itemId={item.id} />;
       case "picker":
         return (
           <PickerCard card={c} data={data} jobIds={pickerJobs[c.purpose]()} onPick={(id) => pick(item.id, c.purpose, id)} />

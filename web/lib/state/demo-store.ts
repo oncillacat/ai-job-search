@@ -6,6 +6,7 @@
 // profiles and preferences tables.
 
 import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
+import type { TailorResponse } from "@/app/api/tailor/route";
 import { useSyncExternalStore } from "react";
 import { getDefaultPreferences, type Preferences, type Profile } from "@/lib/data";
 
@@ -48,6 +49,16 @@ export type ChatCard =
   | { type: "followUpEmail"; jobId: string; done?: boolean }
   | { type: "kind"; jobId: string }
   | { type: "interview"; jobId: string }
+  | {
+      /** Application prepared live for a real posting */
+      type: "tailor";
+      posting: ScoredPosting;
+      result?: TailorResponse;
+      error?: string;
+      /** The person's edits */
+      cvText?: string;
+      letterText?: string;
+    }
   | { type: "note" };
 
 export interface ChatItem {
@@ -72,7 +83,7 @@ export interface ChatThread {
   /** Claude read this person's own CV: the demo's sample applications aren't theirs */
   ownCv?: boolean;
   /** Real postings the person saved from a live search, newest first */
-  saved?: (ScoredPosting & { savedAt: string })[];
+  saved?: (ScoredPosting & { savedAt: string; appliedAt?: string })[];
 }
 
 export interface ChatMessage {
@@ -252,6 +263,17 @@ export const demoActions = {
       const saved = s.chat.saved ?? [];
       if (saved.some((x) => x.id === p.id)) return s;
       return { ...s, chat: { ...s.chat, saved: [{ ...p, savedAt: new Date().toISOString() }, ...saved].slice(0, 200) } };
+    });
+  },
+  /** Saves the posting if needed and records that the person applied. */
+  markPostingApplied(p: ScoredPosting) {
+    set((s) => {
+      const now = new Date().toISOString();
+      const saved = s.chat.saved ?? [];
+      const next = saved.some((x) => x.id === p.id)
+        ? saved.map((x) => (x.id === p.id ? { ...x, appliedAt: x.appliedAt ?? now } : x))
+        : [{ ...p, savedAt: now, appliedAt: now }, ...saved];
+      return { ...s, chat: { ...s.chat, saved: next } };
     });
   },
   unsavePosting(id: string) {
