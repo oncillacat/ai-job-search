@@ -1,4 +1,5 @@
 import { liveAllowed } from "@/lib/access";
+import { forward, remoteSite } from "@/lib/remote";
 import { liveSearch, type SearchProfile } from "@/lib/search/run";
 import type { PortalResult, Posting } from "@/lib/search/types";
 
@@ -49,6 +50,9 @@ function cleanResults(raw: unknown): PortalResult[] {
 }
 
 export async function POST(request: Request) {
+  // Connected local app: Claude runs on the shared site.
+  const remote = remoteSite();
+  if (remote) return forward(remote, "/api/search", { method: "POST", body: await request.text() });
   const access = await liveAllowed(request);
   if (!access.ok) return Response.json({ message: access.message }, { status: access.status });
   const raw = await request.text();

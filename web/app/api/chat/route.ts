@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { liveAllowed } from "@/lib/access";
+import { forward, remoteSite } from "@/lib/remote";
 import {
   getApplicationQuestions,
   getEvaluation,
@@ -340,6 +341,19 @@ async function runTool(
 }
 
 export async function POST(request: Request) {
+  // Connected local app: Claude runs on the shared site, but the search runs here, on this computer.
+  const remote = remoteSite();
+  if (remote) {
+    const raw = await request.text();
+    let body: { state?: Record<string, unknown> } | null = null;
+    try {
+      body = JSON.parse(raw) as { state?: Record<string, unknown> };
+    } catch {
+      return Response.json({ error: "bad_request" }, { status: 400 });
+    }
+    if (body?.state) body.state.localSearch = true;
+    return forward(remote, "/api/chat", { method: "POST", body: JSON.stringify(body) });
+  }
   const access = await liveAllowed(request);
   if (!access.ok) return Response.json({ error: "disabled", message: access.message }, { status: access.status });
   const raw = await request.text();
@@ -511,6 +525,18 @@ export async function POST(request: Request) {
 
 /** Lets the chat page show whether live Claude is available, without spending tokens. */
 export async function GET(request: Request) {
+  const remote = remoteSite();
+  if (remote) {
+    const res = await forward(remote, "/api/chat", { method: "GET" });
+    const d = (await res.json().catch(() => ({}))) as { live?: boolean; reason?: string; message?: string };
+    // This app's own build stamp: the shared site's would look like an update here.
+    return Response.json({
+      live: !!d.live,
+      reason: d.live ? undefined : (d.reason ?? d.message ?? "Couldn't connect to the shared site."),
+      build: process.env.NEXT_PUBLIC_BUILD_STAMP,
+      connected: true,
+    });
+  }
   const access = await liveAllowed(request);
   if (!access.ok) return Response.json({ live: false, reason: access.message, build: process.env.NEXT_PUBLIC_BUILD_STAMP });
   return Response.json({ live: true, build: process.env.NEXT_PUBLIC_BUILD_STAMP });

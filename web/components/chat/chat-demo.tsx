@@ -32,7 +32,7 @@ import type { ChatEvent } from "@/app/api/chat/route";
 import type { ExtractedProfile } from "@/app/api/profile/route";
 import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
 import { TailorCard } from "./tailor-card";
-import { helperAvailable, searchFromThisComputer } from "@/lib/state/local-helper";
+import { onSharedSite, searchFromThisComputer } from "@/lib/state/local-helper";
 
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
 // routing in `route()` once sign-in exists; the cards stay the same.
@@ -59,15 +59,8 @@ export function ChatDemo({ data }: { data: ChatData }) {
     null,
   );
   const [busy, setBusy] = useState(false);
-  /** The local search helper runs on this computer (shared site only). */
-  const [localHelper, setLocalHelper] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    void helperAvailable().then((v) => !cancelled && setLocalHelper(v));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  /** Running on this computer and connected to the shared site for Claude (lib/remote.ts). */
+  const [connectedApp, setConnectedApp] = useState(false);
   /** Same as `live?.on`, readable inside handlers without waiting for a re-render. */
   const liveRef = useRef(false);
   /** The server was rebuilt after this page loaded: new features need a reload. */
@@ -82,11 +75,13 @@ export function ChatDemo({ data }: { data: ChatData }) {
             live: boolean;
             reason?: string;
             build?: string;
+            connected?: boolean;
           }>,
       )
       .then((d) => {
         if (cancelled) return;
         setLive({ on: d.live, reason: d.reason });
+        setConnectedApp(!!d.connected);
         liveRef.current = d.live;
         if (d.build && d.build !== process.env.NEXT_PUBLIC_BUILD_STAMP)
           setStale(true);
@@ -102,7 +97,12 @@ export function ChatDemo({ data }: { data: ChatData }) {
       fetch("/api/chat")
         .then((r) => r.json() as Promise<{ build?: string }>)
         .then((d) => {
-          if (!cancelled && d.build && d.build !== process.env.NEXT_PUBLIC_BUILD_STAMP) setStale(true);
+          if (
+            !cancelled &&
+            d.build &&
+            d.build !== process.env.NEXT_PUBLIC_BUILD_STAMP
+          )
+            setStale(true);
         })
         .catch(() => {});
     };
@@ -154,7 +154,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const d = s.decisions[jobId];
     if (d?.decision === "applied")
       return Math.floor((Date.now() - Date.parse(d.at)) / 864e5);
-    return s.chat.ownCv || liveRef.current ? undefined : data.daysSinceApplied[jobId];
+    return s.chat.ownCv || liveRef.current
+      ? undefined
+      : data.daysSinceApplied[jobId];
   }
 
   function raiseCheckIns() {
@@ -467,7 +469,6 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const messages = transcript(q);
     if (show) you(q);
     setBusy(true);
-    const localSearch = await helperAvailable();
     const statuses = Object.fromEntries(
       data.jobs.map((j) => [j.id, statusOf(j.id)]),
     );
@@ -499,7 +500,6 @@ export function ChatDemo({ data }: { data: ChatData }) {
             prefs: confirmedPrefs(),
             // With Claude connected there is no sample person: everything is this person's own.
             ownCv: true,
-            localSearch,
             recent: [...knownPostings().values()].slice(-40).map((x) => ({
               posting_id: x.id,
               title: x.title,
@@ -588,11 +588,20 @@ export function ChatDemo({ data }: { data: ChatData }) {
     setBusy(true);
     try {
       const s = getDemoState();
-      const search = await searchFromThisComputer({ ...q, profile: s.profile, seen: s.chat.seenJobs });
+      const search = await searchFromThisComputer({
+        ...q,
+        profile: s.profile,
+        seen: s.chat.seenJobs,
+      });
       demoActions.chatRemove(progress);
       runSearch(false, true, search);
     } catch (err) {
-      demoActions.chatSetText(progress, err instanceof Error ? err.message : "The search didn't finish. Try again.");
+      demoActions.chatSetText(
+        progress,
+        err instanceof Error
+          ? err.message
+          : "The search didn't finish. Try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -777,7 +786,11 @@ export function ChatDemo({ data }: { data: ChatData }) {
   }, []);
 
   // Opened from a link to one card (the dashboard's "Open in chat"): show that card, once.
-  const linked = useRef<string | null>(typeof window === "undefined" ? null : window.location.hash.slice(1) || null);
+  const linked = useRef<string | null>(
+    typeof window === "undefined"
+      ? null
+      : window.location.hash.slice(1) || null,
+  );
 
   useEffect(() => {
     if (linked.current) {
@@ -933,8 +946,8 @@ export function ChatDemo({ data }: { data: ChatData }) {
                   />{" "}
                   Connected to Claude
                 </span>
-                {localHelper
-                  ? "Searches run from your computer (local app found); Claude rates and tailors here."
+                {connectedApp
+                  ? "Running on your computer: searches, LinkedIn included, run from here; Claude works through the shared site."
                   : "Typed messages go to Claude; buttons and cards work as before."}
               </>
             ) : (
@@ -963,6 +976,8 @@ export function ChatDemo({ data }: { data: ChatData }) {
           </button>
         )}
       </div>
+
+      {live?.on && onSharedSite() && <LocalAppHint />}
 
       {stale && (
         <p
@@ -993,7 +1008,11 @@ export function ChatDemo({ data }: { data: ChatData }) {
                 </p>
               </li>
             ) : (
-              <li key={item.id} id={`item-${item.id}`} className="settle flex scroll-mt-20 gap-3">
+              <li
+                key={item.id}
+                id={`item-${item.id}`}
+                className="settle flex scroll-mt-20 gap-3"
+              >
                 <span
                   aria-hidden
                   className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-mist text-[13px] font-semibold text-mist-ink"
@@ -1077,6 +1096,60 @@ export function ChatDemo({ data }: { data: ChatData }) {
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+const START_COMMAND = "~/ai-job-search-web/web/scripts/start.command";
+
+/** On the shared site: LinkedIn needs the app running on the person's own computer. */
+function LocalAppHint() {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div
+      role="status"
+      className="mb-4 border-l-2 border-mist-ink/40 bg-mist-soft px-4 py-3 text-[15px] text-mist-ink"
+    >
+      <p>
+        <strong>To include LinkedIn, use the app on your computer.</strong> This
+        site can&apos;t reach LinkedIn from its servers, and browsers don&apos;t
+        let a website search from your computer. Here, searches use Job Bank
+        only.
+      </p>
+      <ol className="mt-2 list-decimal space-y-1.5 pl-5">
+        <li>
+          Double-click <strong>Start AI Job Search</strong> on your Desktop. The
+          first time, it asks for your access code, then opens the app in your
+          browser.
+        </li>
+        <li>
+          No Desktop starter? Paste this into Terminal:{" "}
+          <code className="bg-surface px-1.5 py-0.5 text-[13px] text-ink">
+            {START_COMMAND}
+          </code>{" "}
+          <button
+            type="button"
+            className="underline underline-offset-4"
+            onClick={() =>
+              void navigator.clipboard
+                ?.writeText(START_COMMAND)
+                .then(() => setCopied(true))
+            }
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </li>
+        <li>
+          Already running?{" "}
+          <a
+            href="http://localhost:3124/chat"
+            className="font-medium underline underline-offset-4"
+          >
+            Open the app on your computer
+          </a>
+          . It uses Claude through this site, with the same access code.
+        </li>
+      </ol>
     </div>
   );
 }

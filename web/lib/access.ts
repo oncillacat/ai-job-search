@@ -19,6 +19,8 @@ export function passcodeRequired() {
 
 /** Claude features can run on this deployment at all (key present; on Vercel, gated or opened). */
 export function liveConfigured() {
+  // A local app connected to the shared site (see lib/remote.ts) uses Claude through it.
+  if (!onVercel() && !hasKey() && process.env.REMOTE_SITE && process.env.REMOTE_ACCESS_CODE) return true;
   if (!hasKey()) return false;
   if (!onVercel()) return true;
   return !!process.env.ALLOW_PUBLIC_CHAT || !!process.env.APP_PASSCODE;
@@ -66,6 +68,13 @@ export async function liveAllowed(request: Request): Promise<{ ok: true } | { ok
   if (!onVercel() || process.env.ALLOW_PUBLIC_CHAT) return { ok: true };
   if (!process.env.APP_PASSCODE) {
     return { ok: false, status: 503, message: "Live features are off on the public demo until sign-in exists." };
+  }
+  // A connected local app sends the code itself (server to server).
+  const sent = request.headers.get("x-access-code");
+  if (sent) {
+    if (await passcodeMatches(sent)) return { ok: true };
+    await new Promise((r) => setTimeout(r, 800));
+    return { ok: false, status: 401, message: "The access code in your app's settings doesn't match." };
   }
   const cookie = request.headers
     .get("cookie")

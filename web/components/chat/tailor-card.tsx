@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { TailoredApplication, TailorResponse } from "@/app/api/tailor/route";
-import { demoActions, getDemoState, useDemoState, type ChatCard } from "@/lib/state/demo-store";
+import type {
+  TailoredApplication,
+  TailorResponse,
+} from "@/app/api/tailor/route";
+import {
+  demoActions,
+  getDemoState,
+  useDemoState,
+  type ChatCard,
+} from "@/lib/state/demo-store";
 import { saveFile } from "@/lib/state/local-files";
-import { detailFromThisComputer } from "@/lib/state/local-helper";
 import { Box, btnGhost, btnPrimary, btnQuiet, CopyButton } from "./chat-cards";
 import { CvPreview, plainText } from "./cv-document";
 import { downloadPdf } from "./pdf-export";
@@ -13,15 +20,36 @@ import { downloadPdf } from "./pdf-export";
 // nothing else: form questions are answered only when the person pastes the real ones into the chat.
 // The person reviews, edits and submits on the employer's site.
 
-const steps = ["Reading the full posting", "Checking how well you fit", "Writing your CV and cover letter"];
+const steps = [
+  "Reading the full posting",
+  "Checking how well you fit",
+  "Writing your CV and cover letter",
+];
 
 // Requests in flight, so a re-render (or React's double effects in development) never sends twice.
 const inFlight = new Set<string>();
 
-export function cvToText(cv: TailoredApplication["cv"], name: string, fr: boolean, contact = "") {
+export function cvToText(
+  cv: TailoredApplication["cv"],
+  name: string,
+  fr: boolean,
+  contact = "",
+) {
   const h = fr
-    ? { profile: "Profil", skills: "Compétences", exp: "Expérience", edu: "Formation", lang: "Langues" }
-    : { profile: "Profile", skills: "Skills", exp: "Experience", edu: "Education", lang: "Languages" };
+    ? {
+        profile: "Profil",
+        skills: "Compétences",
+        exp: "Expérience",
+        edu: "Formation",
+        lang: "Langues",
+      }
+    : {
+        profile: "Profile",
+        skills: "Skills",
+        exp: "Experience",
+        edu: "Education",
+        lang: "Languages",
+      };
   return [
     `# ${name}`,
     cv.headline,
@@ -42,13 +70,19 @@ export function cvToText(cv: TailoredApplication["cv"], name: string, fr: boolea
     ]),
     "",
     `## ${h.edu}`,
-    ...cv.education.map((e) => `- ${e.degree}, ${e.school}${e.dates ? ` (${e.dates})` : ""}`),
-    ...(cv.languages.length ? ["", `## ${h.lang}`, cv.languages.join(" · ")] : []),
+    ...cv.education.map(
+      (e) => `- ${e.degree}, ${e.school}${e.dates ? ` (${e.dates})` : ""}`,
+    ),
+    ...(cv.languages.length
+      ? ["", `## ${h.lang}`, cv.languages.join(" · ")]
+      : []),
   ].join("\n");
 }
 
 function download(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const url = URL.createObjectURL(
+    new Blob([text], { type: "text/plain;charset=utf-8" }),
+  );
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
@@ -65,7 +99,13 @@ const slug = (s: string) =>
     .replace(/^-|-$/g, "")
     .slice(0, 40) || "job";
 
-export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "tailor" }>; itemId: string }) {
+export function TailorCard({
+  card,
+  itemId,
+}: {
+  card: Extract<ChatCard, { type: "tailor" }>;
+  itemId: string;
+}) {
   const { chat, profile } = useDemoState();
   const p = card.posting;
   const [step, setStep] = useState(0);
@@ -74,33 +114,44 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
   useEffect(() => {
     if (!working || inFlight.has(itemId)) return;
     inFlight.add(itemId);
-    const timers = steps.map((_, i) => setTimeout(() => setStep((s) => Math.max(s, i)), [0, 6000, 18000][i]));
+    const timers = steps.map((_, i) =>
+      setTimeout(() => setStep((s) => Math.max(s, i)), [0, 6000, 18000][i]),
+    );
     const s = getDemoState();
-    // On the shared site, read the full posting from this computer when the local helper runs.
-    detailFromThisComputer(p)
-      .then((detail) =>
-        fetch("/api/tailor", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ posting: p, profile: s.profile, detail }),
-        }),
-      )
+    fetch("/api/tailor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ posting: p, profile: s.profile }),
+    })
       .then(async (res) => {
-        const out = (await res.json()) as Partial<TailorResponse> & { message?: string };
-        if (!res.ok || !out.result) throw new Error(out.message ?? "I couldn't prepare this one.");
+        const out = (await res.json()) as Partial<TailorResponse> & {
+          message?: string;
+        };
+        if (!res.ok || !out.result)
+          throw new Error(out.message ?? "I couldn't prepare this one.");
         const result = out as TailorResponse;
         const me = getDemoState().profile;
         const fr = result.result.language === "fr";
-        const cvText = cvToText(result.result.cv, me?.name ?? "", fr, contactLine(me));
+        const cvText = cvToText(
+          result.result.cv,
+          me?.name ?? "",
+          fr,
+          contactLine(me),
+        );
         const letterText = result.result.cover_letter;
         demoActions.chatUpdateCard(itemId, { result, cvText, letterText });
         const dir = `generated/${p.id}`;
         void saveFile(`${dir}/cv.md`, cvText);
         void saveFile(`${dir}/cover-letter.txt`, letterText);
-        void saveFile(`${dir}/fit-check.json`, JSON.stringify(result.result.fit, null, 2));
+        void saveFile(
+          `${dir}/fit-check.json`,
+          JSON.stringify(result.result.fit, null, 2),
+        );
       })
       .catch((e: unknown) => {
-        demoActions.chatUpdateCard(itemId, { error: e instanceof Error ? e.message : "Something went wrong." });
+        demoActions.chatUpdateCard(itemId, {
+          error: e instanceof Error ? e.message : "Something went wrong.",
+        });
       })
       .finally(() => {
         inFlight.delete(itemId);
@@ -113,9 +164,12 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
   const applied = chat.saved?.find((x) => x.id === p.id)?.appliedAt;
   const header = (
     <p>
-      {working ? "On it. I'm preparing everything for " : "Here's your application for "}
+      {working
+        ? "On it. I'm preparing everything for "
+        : "Here's your application for "}
       <strong>{p.title}</strong>
-      {p.company ? ` at ${p.company}` : ""}. You review it and submit it yourself on the employer&apos;s site.
+      {p.company ? ` at ${p.company}` : ""}. You review it and submit it
+      yourself on the employer&apos;s site.
     </p>
   );
 
@@ -130,7 +184,9 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[13px] text-muted">This usually takes one to two minutes. You can keep chatting.</p>
+        <p className="mt-2 text-[13px] text-muted">
+          This usually takes one to two minutes. You can keep chatting.
+        </p>
       </div>
     );
   }
@@ -143,7 +199,9 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
         <button
           type="button"
           className={`${btnQuiet} mt-3`}
-          onClick={() => demoActions.chatUpdateCard(itemId, { error: undefined })}
+          onClick={() =>
+            demoActions.chatUpdateCard(itemId, { error: undefined })
+          }
         >
           Try again
         </button>
@@ -154,7 +212,9 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
   const r = card.result.result;
   const name = profile?.name ?? "";
   const base = slug(`${p.company} ${p.title}`);
-  const cvText = card.cvText ?? cvToText(r.cv, name, r.language === "fr", contactLine(profile));
+  const cvText =
+    card.cvText ??
+    cvToText(r.cv, name, r.language === "fr", contactLine(profile));
   const letterText = card.letterText ?? r.cover_letter;
   const openUrl = card.result.applyUrl ?? p.url;
 
@@ -162,14 +222,29 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
     <div className="space-y-4">
       {header}
 
-      <Box tint={r.fit.verdict === "go" ? "sage" : r.fit.verdict === "maybe" ? "mist" : "sand"}>
+      <Box
+        tint={
+          r.fit.verdict === "go"
+            ? "sage"
+            : r.fit.verdict === "maybe"
+              ? "mist"
+              : "sand"
+        }
+      >
         <p className="font-medium">
-          Fit {Math.round(r.fit.score)} / 100 · {r.fit.verdict === "go" ? "worth applying" : r.fit.verdict === "maybe" ? "a partial match" : "a long shot"}
+          Fit {Math.round(r.fit.score)} / 100 ·{" "}
+          {r.fit.verdict === "go"
+            ? "worth applying"
+            : r.fit.verdict === "maybe"
+              ? "a partial match"
+              : "a long shot"}
         </p>
         <p className="mt-1">{r.fit.summary}</p>
         {r.fit.strengths.length > 0 && (
           <>
-            <p className="mt-2 text-[13px] font-medium text-sage">Where you match</p>
+            <p className="mt-2 text-[13px] font-medium text-sage">
+              Where you match
+            </p>
             <ul className="list-disc pl-5 text-[14px]">
               {r.fit.strengths.map((s) => (
                 <li key={s}>{s}</li>
@@ -179,7 +254,9 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
         )}
         {r.fit.gaps.length > 0 && (
           <>
-            <p className="mt-2 text-[13px] font-medium text-clay">Gaps, named honestly</p>
+            <p className="mt-2 text-[13px] font-medium text-clay">
+              Gaps, named honestly
+            </p>
             <ul className="list-disc pl-5 text-[14px]">
               {r.fit.gaps.map((s) => (
                 <li key={s}>{s}</li>
@@ -190,12 +267,15 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
         {r.fit.hard_blocker && (
           <p className="mt-2 text-[14px]">
             <strong>Hard requirement:</strong> {r.fit.hard_blocker}
-            {chat.blockerPref === "prepare" ? " I prepared it anyway, as you asked." : ""}
+            {chat.blockerPref === "prepare"
+              ? " I prepared it anyway, as you asked."
+              : ""}
           </p>
         )}
         {!card.result.fullPosting && (
           <p className="mt-2 text-[13px] text-muted">
-            I could only read the listing, not the full posting, so check the requirements when you open it.
+            I could only read the listing, not the full posting, so check the
+            requirements when you open it.
           </p>
         )}
       </Box>
@@ -204,7 +284,11 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
         kind="cv"
         sender={{ name, contact: contactLine(profile) }}
         title={`CV - ${name} - ${p.company || p.title}`}
-        label={r.language === "fr" ? "Your tailored CV (CV adapté)" : "Your tailored CV"}
+        label={
+          r.language === "fr"
+            ? "Your tailored CV (CV adapté)"
+            : "Your tailored CV"
+        }
         value={cvText}
         rows={18}
         file={`cv-${base}.txt`}
@@ -215,7 +299,9 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
       />
       {r.changes.length > 0 && (
         <details>
-          <summary className="cursor-pointer text-[14px] text-sage">What I changed from your CV, and why</summary>
+          <summary className="cursor-pointer text-[14px] text-sage">
+            What I changed from your CV, and why
+          </summary>
           <ul className="mt-2 list-disc pl-5 text-[14px]">
             {r.changes.map((c) => (
               <li key={c}>{c}</li>
@@ -228,7 +314,11 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
         kind="letter"
         sender={{ name, contact: contactLine(profile) }}
         title={`${r.language === "fr" ? "Lettre" : "Cover letter"} - ${name} - ${p.company || p.title}`}
-        label={r.language === "fr" ? "Cover letter (lettre de présentation)" : "Cover letter"}
+        label={
+          r.language === "fr"
+            ? "Cover letter (lettre de présentation)"
+            : "Cover letter"
+        }
         value={letterText}
         rows={14}
         file={`cover-letter-${base}.txt`}
@@ -239,7 +329,8 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
       />
 
       <p className="text-[14px] text-muted">
-        If the application form asks questions, paste them here in the chat and I&apos;ll draft answers from your profile.
+        If the application form asks questions, paste them here in the chat and
+        I&apos;ll draft answers from your profile.
       </p>
 
       {r.to_fill.length > 0 && (
@@ -255,22 +346,36 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
 
       <div className="flex flex-wrap items-center gap-2">
         {/^https:\/\//.test(openUrl) && (
-          <a href={openUrl} target="_blank" rel="noopener noreferrer" className={btnPrimary}>
+          <a
+            href={openUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={btnPrimary}
+          >
             Open the posting to apply ↗
           </a>
         )}
         {applied ? (
           <span className="text-[14px] text-sage">
-            ✓ Marked as applied on {new Date(applied).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}
+            ✓ Marked as applied on{" "}
+            {new Date(applied).toLocaleDateString("en-CA", {
+              month: "short",
+              day: "numeric",
+            })}
           </span>
         ) : (
-          <button type="button" className={btnQuiet} onClick={() => demoActions.markPostingApplied(p)}>
+          <button
+            type="button"
+            className={btnQuiet}
+            onClick={() => demoActions.markPostingApplied(p)}
+          >
             I&apos;ve submitted it
           </button>
         )}
       </div>
       <p className="text-[13px] text-muted">
-        Copies are kept in this browser&apos;s private storage (Settings → Your files).
+        Copies are kept in this browser&apos;s private storage (Settings → Your
+        files).
       </p>
     </div>
   );
@@ -297,7 +402,9 @@ function Editable({
 }) {
   const [text, setText] = useState(value);
   const [editing, setEditing] = useState(false);
-  const [pdfState, setPdfState] = useState<"idle" | "making" | "failed">("idle");
+  const [pdfState, setPdfState] = useState<"idle" | "making" | "failed">(
+    "idle",
+  );
   const dirty = text !== value;
   return (
     <div>
@@ -347,18 +454,30 @@ function Editable({
           {editing ? "Done editing" : "Edit"}
         </button>
         <CopyButton text={plainText(text)} />
-        <button type="button" className={btnGhost} onClick={() => download(file, plainText(text))}>
+        <button
+          type="button"
+          className={btnGhost}
+          onClick={() => download(file, plainText(text))}
+        >
           Download text
         </button>
         {editing && kind === "cv" && (
-          <span className="text-[13px] text-muted"># is your name, ## a section, ### a role, - a bullet point.</span>
+          <span className="text-[13px] text-muted">
+            # is your name, ## a section, ### a role, - a bullet point.
+          </span>
         )}
-        {pdfState === "failed" && <span className="text-[13px] text-clay">I couldn&apos;t make the PDF. Try again.</span>}
+        {pdfState === "failed" && (
+          <span className="text-[13px] text-clay">
+            I couldn&apos;t make the PDF. Try again.
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-export function contactLine(p: { email?: string; location?: string } | null | undefined) {
+export function contactLine(
+  p: { email?: string; location?: string } | null | undefined,
+) {
   return [p?.location, p?.email].filter(Boolean).join(" · ");
 }

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { liveAllowed } from "@/lib/access";
+import { forward, remoteSite } from "@/lib/remote";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { postingDetail } from "@/lib/search/detail";
@@ -77,6 +78,15 @@ function validPosting(raw: unknown): Posting | null {
 }
 
 export async function POST(request: Request) {
+  // Connected local app: read the full posting here (this computer's internet), tailor on the shared site.
+  const remote = remoteSite();
+  if (remote) {
+    const body = (await request.json().catch(() => null)) as { posting?: unknown; detail?: unknown } | null;
+    const posting = validPosting(body?.posting);
+    if (!body || !posting) return Response.json({ message: "I need a posting and your profile." }, { status: 400 });
+    if (!body.detail) body.detail = await postingDetail(posting);
+    return forward(remote, "/api/tailor", { method: "POST", body: JSON.stringify(body) });
+  }
   const access = await liveAllowed(request);
   if (!access.ok) return Response.json({ message: access.message }, { status: access.status });
   const raw = await request.text();

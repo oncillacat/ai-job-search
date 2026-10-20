@@ -12,6 +12,8 @@ export async function proxy(request: NextRequest) {
   if (OPEN.some((r) => r.test(pathname))) return NextResponse.next();
   if (await hasAccessCookie(request.cookies.get(ACCESS_COOKIE)?.value)) return NextResponse.next();
 
+  // A connected local app sends the code itself; the route checks it (lib/access.ts).
+  if (pathname.startsWith("/api/") && request.headers.get("x-access-code")) return NextResponse.next();
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ message: "Enter the access code to use this site.", live: false }, { status: 401 });
   }

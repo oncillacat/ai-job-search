@@ -4,7 +4,7 @@
 
 const DEFAULT_ORIGINS = ["https://ai-job-search-phi.vercel.app"];
 
-function allowedOrigins() {
+export function allowedOrigins() {
   const extra = (process.env.LOCAL_HELPER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return [...DEFAULT_ORIGINS, ...extra];
 }
@@ -12,8 +12,8 @@ function allowedOrigins() {
 /** CORS headers for an allowed origin, or null when the caller isn't allowed. */
 export function helperHeaders(request: Request): Record<string, string> | null {
   const origin = request.headers.get("origin");
-  // Same-origin calls (no Origin header) come from the local site itself.
-  if (!origin) return {};
+  // Calls from the local site itself (the helper window), with or without an Origin header.
+  if (!origin || origin === new URL(request.url).origin) return {};
   if (!allowedOrigins().includes(origin)) return null;
   return {
     "Access-Control-Allow-Origin": origin,

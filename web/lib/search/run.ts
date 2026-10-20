@@ -101,7 +101,14 @@ export async function liveSearch(input: {
   const off = results.filter((r) => r.status === "not_connected").map((r) => r.name);
   const notice =
     [
-      failed.length ? `${failed.join(" and ")} didn't answer today, so you may see fewer jobs than usual.` : "",
+      // On the shared site's servers, LinkedIn refuses: say how to include it instead.
+      !input.provided && process.env.VERCEL && failed.includes("LinkedIn")
+        ? "LinkedIn doesn't answer the site's servers. Connect the helper on your computer to include it."
+        : "",
+      (() => {
+        const rest = !input.provided && process.env.VERCEL ? failed.filter((f) => f !== "LinkedIn") : failed;
+        return rest.length ? `${rest.join(" and ")} didn't answer today, so you may see fewer jobs than usual.` : "";
+      })(),
       off.length ? `${off.join(" and ")} ${off.length > 1 ? "aren't" : "isn't"} connected yet, so ${off.length > 1 ? "they weren't" : "it wasn't"} searched.` : "",
     ]
       .filter(Boolean)
