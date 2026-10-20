@@ -2,7 +2,13 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { demoActions, getDemoState, useDemoState, type ChatCard, type ChatItem } from "@/lib/state/demo-store";
+import {
+  demoActions,
+  getDemoState,
+  useDemoState,
+  type ChatCard,
+  type ChatItem,
+} from "@/lib/state/demo-store";
 import {
   AnswerCard,
   ApplyCard,
@@ -30,7 +36,8 @@ import { TailorCard } from "./tailor-card";
 // Scripted demo of the chat-first design (docs/plan-chat-first.md). Real Claude replaces the
 // routing in `route()` once sign-in exists; the cards stay the same.
 
-type Status = "saved" | "applied" | "let-go" | "interview" | "offer" | "rejected" | null;
+type Status =
+  "saved" | "applied" | "let-go" | "interview" | "offer" | "rejected" | null;
 
 const starters = [
   "Do a new search",
@@ -47,21 +54,55 @@ export function ChatDemo({ data }: { data: ChatData }) {
   const booted = useRef(false);
   const params = useSearchParams();
   // Live Claude when the server has a key; otherwise the scripted routing below.
-  const [live, setLive] = useState<{ on: boolean; reason?: string } | null>(null);
+  const [live, setLive] = useState<{ on: boolean; reason?: string } | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
+  /** The server was rebuilt after this page loaded: new features need a reload. */
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/chat")
-      .then((r) => r.json() as Promise<{ live: boolean; reason?: string }>)
-      .then((d) => !cancelled && setLive({ on: d.live, reason: d.reason }))
-      .catch(() => !cancelled && setLive({ on: false, reason: "Couldn't reach the server." }));
+      .then(
+        (r) =>
+          r.json() as Promise<{
+            live: boolean;
+            reason?: string;
+            build?: string;
+          }>,
+      )
+      .then((d) => {
+        if (cancelled) return;
+        setLive({ on: d.live, reason: d.reason });
+        if (d.build && d.build !== process.env.NEXT_PUBLIC_BUILD_STAMP)
+          setStale(true);
+      })
+      .catch(
+        () =>
+          !cancelled &&
+          setLive({ on: false, reason: "Couldn't reach the server." }),
+      );
+    // Coming back to the tab after the server was restarted: check again, so the reload notice shows early.
+    const recheck = () => {
+      if (document.visibilityState !== "visible") return;
+      fetch("/api/chat")
+        .then((r) => r.json() as Promise<{ build?: string }>)
+        .then((d) => {
+          if (!cancelled && d.build && d.build !== process.env.NEXT_PUBLIC_BUILD_STAMP) setStale(true);
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", recheck);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", recheck);
     };
   }, []);
 
-  const onboarded = chat.items.some((i) => i.card?.type === "blocker" && i.card.done);
+  const onboarded = chat.items.some(
+    (i) => i.card?.type === "blocker" && i.card.done,
+  );
 
   function statusOf(jobId: string): Status {
     const s = getDemoState();
@@ -74,10 +115,12 @@ export function ChatDemo({ data }: { data: ChatData }) {
     return app.status === "closed" ? "rejected" : app.status;
   }
 
-  const company = (jobId: string) => data.jobs.find((j) => j.id === jobId)?.company ?? "this job";
+  const company = (jobId: string) =>
+    data.jobs.find((j) => j.id === jobId)?.company ?? "this job";
   const say = (text: string) => demoActions.chatAdd({ from: "claude", text });
   const you = (text: string) => demoActions.chatAdd({ from: "you", text });
-  const card = (c: ChatCard, text?: string) => demoActions.chatAdd({ from: "claude", card: c, text });
+  const card = (c: ChatCard, text?: string) =>
+    demoActions.chatAdd({ from: "claude", card: c, text });
 
   function dueCheckIns() {
     const s = getDemoState();
@@ -96,14 +139,17 @@ export function ChatDemo({ data }: { data: ChatData }) {
   function daysSince(jobId: string): number | undefined {
     const s = getDemoState();
     const d = s.decisions[jobId];
-    if (d?.decision === "applied") return Math.floor((Date.now() - Date.parse(d.at)) / 864e5);
+    if (d?.decision === "applied")
+      return Math.floor((Date.now() - Date.parse(d.at)) / 864e5);
     return s.chat.ownCv ? undefined : data.daysSinceApplied[jobId];
   }
 
   function raiseCheckIns() {
     const due = dueCheckIns();
     if (!due.length) return;
-    demoActions.chatSet({ checkedIn: [...getDemoState().chat.checkedIn, ...due] });
+    demoActions.chatSet({
+      checkedIn: [...getDemoState().chat.checkedIn, ...due],
+    });
     due.forEach((id) => card({ type: "checkIn", jobId: id }));
   }
 
@@ -113,18 +159,29 @@ export function ChatDemo({ data }: { data: ChatData }) {
   function weekNumbers() {
     const s = getDemoState();
     const now = Date.now();
-    const recent = s.chat.searches.filter((t) => now - Date.parse(t) < 7 * 864e5).length;
-    const liveCards = s.chat.items.flatMap((i) => (i.card?.type === "search" && i.card.live ? [i.card.live] : []));
+    const recent = s.chat.searches.filter(
+      (t) => now - Date.parse(t) < 7 * 864e5,
+    ).length;
+    const liveCards = s.chat.items.flatMap((i) =>
+      i.card?.type === "search" && i.card.live ? [i.card.live] : [],
+    );
     const searched = liveCards.length
-      ? liveCards.filter((l) => now - Date.parse(l.at) < 7 * 864e5).reduce((n, l) => n + l.searched, 0)
+      ? liveCards
+          .filter((l) => now - Date.parse(l.at) < 7 * 864e5)
+          .reduce((n, l) => n + l.searched, 0)
       : data.rounds
           .slice(0, Math.min(recent, data.rounds.length))
-          .reduce((n, r) => n + r.sources.reduce((m, src) => m + src.count, 0), 0);
+          .reduce(
+            (n, r) => n + r.sources.reduce((m, src) => m + src.count, 0),
+            0,
+          );
     const applied = data.jobs.filter((j) => {
       const st = statusOf(j.id);
       if (!st || st === "saved" || st === "let-go") return false;
       const d = s.decisions[j.id];
-      return d ? now - Date.parse(d.at) < 7 * 864e5 : (data.daysSinceApplied[j.id] ?? 99) <= 7;
+      return d
+        ? now - Date.parse(d.at) < 7 * 864e5
+        : (data.daysSinceApplied[j.id] ?? 99) <= 7;
     }).length;
     return { searched, applied };
   }
@@ -134,25 +191,36 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const now = new Date();
     const round = s.chat.searches.length;
     const searches = [...s.chat.searches, now.toISOString()];
-    const sameDay = searches.filter((t) => new Date(t).toDateString() === now.toDateString()).length;
-    const thisWeek = searches.filter((t) => now.getTime() - new Date(t).getTime() < 7 * 864e5).length;
+    const sameDay = searches.filter(
+      (t) => new Date(t).toDateString() === now.toDateString(),
+    ).length;
+    const thisWeek = searches.filter(
+      (t) => now.getTime() - new Date(t).getTime() < 7 * 864e5,
+    ).length;
     let encourage: { searched: number; applied: number } | undefined;
     if (!byClaude && (sameDay > 2 || thisWeek > 3)) {
       const searched = data.rounds
         .slice(0, Math.min(round + 1, data.rounds.length))
-        .reduce((n, r) => n + r.sources.reduce((m, src) => m + src.count, 0), 0);
+        .reduce(
+          (n, r) => n + r.sources.reduce((m, src) => m + src.count, 0),
+          0,
+        );
       const applied = data.jobs.filter((j) => {
         const st = statusOf(j.id);
         if (!st || st === "saved" || st === "let-go") return false;
         const d = s.decisions[j.id];
-        return d ? now.getTime() - new Date(d.at).getTime() < 7 * 864e5 : (data.daysSinceApplied[j.id] ?? 99) <= 7;
+        return d
+          ? now.getTime() - new Date(d.at).getTime() < 7 * 864e5
+          : (data.daysSinceApplied[j.id] ?? 99) <= 7;
       }).length;
       encourage = { searched, applied };
     }
     demoActions.chatSet({
       searches,
       focusJob: null,
-      seenJobs: live ? [...s.chat.seenJobs, ...live.seenIds].slice(-3000) : s.chat.seenJobs,
+      seenJobs: live
+        ? [...s.chat.seenJobs, ...live.seenIds].slice(-3000)
+        : s.chat.seenJobs,
     });
     if (echo) you("Do a new search");
     card({ type: "search", round, encourage, byClaude, live });
@@ -165,13 +233,18 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const s = getDemoState();
     const map = new Map<string, ScoredPosting>();
     for (const i of s.chat.items)
-      if (i.card?.type === "search" && i.card.live) for (const p of [...i.card.live.high, ...i.card.live.medium]) map.set(p.id, p);
+      if (i.card?.type === "search" && i.card.live)
+        for (const p of [...i.card.live.high, ...i.card.live.medium])
+          map.set(p.id, p);
     for (const p of s.chat.saved ?? []) map.set(p.id, p);
     return map;
   }
 
   function startTailor(p: ScoredPosting, echo = true) {
-    if (echo) you(`Prepare my application for ${p.title}${p.company ? ` at ${p.company}` : ""}`);
+    if (echo)
+      you(
+        `Prepare my application for ${p.title}${p.company ? ` at ${p.company}` : ""}`,
+      );
     card({ type: "tailor", posting: p });
   }
 
@@ -183,7 +256,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
 
   function startAsk(jobId: string) {
     demoActions.chatSet({ focusJob: jobId });
-    say(`Sure. What would you like to know about ${data.jobs.find((j) => j.id === jobId)?.title} at ${company(jobId)}? You can paste a question from an online interview or the application form, or ask anything.`);
+    say(
+      `Sure. What would you like to know about ${data.jobs.find((j) => j.id === jobId)?.title} at ${company(jobId)}? You can paste a question from an online interview or the application form, or ask anything.`,
+    );
   }
 
   function startInterview(jobId: string) {
@@ -196,11 +271,21 @@ export function ChatDemo({ data }: { data: ChatData }) {
     card({ type: "checkIn", jobId });
   }
 
-  const pickerJobs: Record<Extract<ChatCard, { type: "picker" }>["purpose"], () => string[]> = {
-    apply: () => data.jobs.filter((j) => data.tailored[j.id] && statusOf(j.id) !== "applied").map((j) => j.id),
+  const pickerJobs: Record<
+    Extract<ChatCard, { type: "picker" }>["purpose"],
+    () => string[]
+  > = {
+    apply: () =>
+      data.jobs
+        .filter((j) => data.tailored[j.id] && statusOf(j.id) !== "applied")
+        .map((j) => j.id),
     ask: () => data.jobs.map((j) => j.id),
-    interview: () => data.jobs.map((j) => j.id).sort((a) => (statusOf(a) === "interview" ? -1 : 1)),
-    followup: () => data.jobs.filter((j) => statusOf(j.id) === "applied").map((j) => j.id),
+    interview: () =>
+      data.jobs
+        .map((j) => j.id)
+        .sort((a) => (statusOf(a) === "interview" ? -1 : 1)),
+    followup: () =>
+      data.jobs.filter((j) => statusOf(j.id) === "applied").map((j) => j.id),
   };
 
   function starter(label: (typeof starters)[number]) {
@@ -210,31 +295,51 @@ export function ChatDemo({ data }: { data: ChatData }) {
     if (label === "Do a new search") return runSearch();
     you(label);
     const purpose = (
-      { "Apply to a saved job": "apply", "Ask about a job": "ask", "Follow up on an application": "followup", "Prepare for an interview": "interview" } as const
+      {
+        "Apply to a saved job": "apply",
+        "Ask about a job": "ask",
+        "Follow up on an application": "followup",
+        "Prepare for an interview": "interview",
+      } as const
     )[label];
     card({ type: "picker", purpose });
   }
 
-  function pick(itemId: string, purpose: Extract<ChatCard, { type: "picker" }>["purpose"], jobId: string) {
-    demoActions.chatUpdateCard(itemId, { done: `${data.jobs.find((j) => j.id === jobId)?.title} · ${company(jobId)}` });
+  function pick(
+    itemId: string,
+    purpose: Extract<ChatCard, { type: "picker" }>["purpose"],
+    jobId: string,
+  ) {
+    demoActions.chatUpdateCard(itemId, {
+      done: `${data.jobs.find((j) => j.id === jobId)?.title} · ${company(jobId)}`,
+    });
     if (purpose === "apply") card({ type: "apply", jobId });
     if (purpose === "ask") startAsk(jobId);
     if (purpose === "interview") card({ type: "interview", jobId });
     if (purpose === "followup") card({ type: "checkIn", jobId });
   }
 
-  function checkInAnswer(itemId: string, jobId: string, status: "none" | "interview" | "offer" | "rejected", label: string) {
+  function checkInAnswer(
+    itemId: string,
+    jobId: string,
+    status: "none" | "interview" | "offer" | "rejected",
+    label: string,
+  ) {
     demoActions.chatUpdateCard(itemId, { done: label });
     you(label);
     if (status === "none") card({ type: "followUpEmail", jobId });
     if (status === "interview") {
       demoActions.decide(jobId, "interview");
-      say(`That's great news. I've moved ${company(jobId)} to Interview on your dashboard. Here's some calm prep:`);
+      say(
+        `That's great news. I've moved ${company(jobId)} to Interview on your dashboard. Here's some calm prep:`,
+      );
       card({ type: "interview", jobId });
     }
     if (status === "offer") {
       demoActions.decide(jobId, "offer");
-      say(`Congratulations. I've marked ${company(jobId)} as an offer. Take your time deciding; if you'd like, ask me anything about it.`);
+      say(
+        `Congratulations. I've marked ${company(jobId)} as an offer. Take your time deciding; if you'd like, ask me anything about it.`,
+      );
     }
     if (status === "rejected") {
       demoActions.decide(jobId, "rejected");
@@ -260,15 +365,26 @@ export function ChatDemo({ data }: { data: ChatData }) {
       search:
         c.type === "search"
           ? c.live
-            ? `[Showed live search results: ${c.live.searched} new postings; ${[...c.live.high, ...c.live.medium.slice(0, 10)]
-                .map((x) => `${x.title} at ${x.company}, ${x.location} (${x.portal}, ${x.fit} ${x.score}, ${x.url})`)
-                .join("; ") || "no strong or medium matches"}]`
+            ? `[Showed live search results: ${c.live.searched} new postings; ${
+                [...c.live.high, ...c.live.medium.slice(0, 10)]
+                  .map(
+                    (x) =>
+                      `${x.title} at ${x.company}, ${x.location} (${x.portal}, ${x.fit} ${x.score}, ${x.url})`,
+                  )
+                  .join("; ") || "no strong or medium matches"
+              }]`
             : `[Showed search results, run ${c.round + 1}]`
           : "",
       picker: c.type === "picker" ? `[Asked which job, for: ${c.purpose}]` : "",
-      apply: c.type === "apply" ? `[Showed the application package${job}${c.submitted ? "; marked submitted" : ""}]` : "",
+      apply:
+        c.type === "apply"
+          ? `[Showed the application package${job}${c.submitted ? "; marked submitted" : ""}]`
+          : "",
       answer: `[Answered a question${job}]`,
-      checkIn: c.type === "checkIn" ? `[Asked if they heard back${job}${c.done ? `: ${c.done}` : ""}]` : "",
+      checkIn:
+        c.type === "checkIn"
+          ? `[Asked if they heard back${job}${c.done ? `: ${c.done}` : ""}]`
+          : "",
       followUpEmail: `[Showed a follow-up email draft${job}]`,
       kind: "[Offered kind words after a rejection]",
       tailor:
@@ -307,7 +423,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
 
   /** The roles and cities the person confirmed on the guesses card, if any. */
   function confirmedPrefs() {
-    const g = [...getDemoState().chat.items].reverse().find((i) => i.card?.type === "guesses" && i.card.done)?.card;
+    const g = [...getDemoState().chat.items]
+      .reverse()
+      .find((i) => i.card?.type === "guesses" && i.card.done)?.card;
     const split = (v?: string) =>
       (v ?? "")
         .split(/,|;|\/|\bor\b|\band\b/)
@@ -315,12 +433,19 @@ export function ChatDemo({ data }: { data: ChatData }) {
         .filter(Boolean)
         // "Toronto, ON": keep a province code or name with the city before it.
         .reduce<string[]>((out, x) => {
-          if (out.length && /^([A-Z]{2}|Ontario|Quebec|Québec|British Columbia|Alberta|Manitoba|Nova Scotia|Saskatchewan|Canada)$/.test(x))
+          if (
+            out.length &&
+            /^([A-Z]{2}|Ontario|Quebec|Québec|British Columbia|Alberta|Manitoba|Nova Scotia|Saskatchewan|Canada)$/.test(
+              x,
+            )
+          )
             out[out.length - 1] += `, ${x}`;
           else out.push(x);
           return out;
         }, []);
-    return g?.type === "guesses" ? { roles: split(g.roles), cities: split(g.cities) } : undefined;
+    return g?.type === "guesses"
+      ? { roles: split(g.roles), cities: split(g.cities) }
+      : undefined;
   }
 
   /** Sends a message to Claude. `show: false` sends it without adding a chat bubble (e.g. the first search). */
@@ -329,7 +454,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
     const messages = transcript(q);
     if (show) you(q);
     setBusy(true);
-    const statuses = Object.fromEntries(data.jobs.map((j) => [j.id, statusOf(j.id)]));
+    const statuses = Object.fromEntries(
+      data.jobs.map((j) => [j.id, statusOf(j.id)]),
+    );
     let current: string | null = null;
     let progress: string | null = null;
     let text = "";
@@ -343,7 +470,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
           state: {
             statuses,
             daysSinceApplied: Object.fromEntries(
-              data.jobs.flatMap((j) => (daysSince(j.id) === undefined ? [] : [[j.id, daysSince(j.id)!]])),
+              data.jobs.flatMap((j) =>
+                daysSince(j.id) === undefined ? [] : [[j.id, daysSince(j.id)!]],
+              ),
             ),
             searchesDone: s.chat.searches.length,
             searchTimes: s.chat.searches,
@@ -377,8 +506,13 @@ export function ChatDemo({ data }: { data: ChatData }) {
           },
         }),
       });
+      const stamp = res.headers.get("X-Build-Stamp");
+      if (stamp && stamp !== process.env.NEXT_PUBLIC_BUILD_STAMP)
+        setStale(true);
       if (!res.ok || !res.body) {
-        const err = (await res.json().catch(() => null)) as { message?: string } | null;
+        const err = (await res.json().catch(() => null)) as {
+          message?: string;
+        } | null;
         say(err?.message ?? "Something went wrong. Try again.");
         return;
       }
@@ -396,8 +530,14 @@ export function ChatDemo({ data }: { data: ChatData }) {
           const e = JSON.parse(line) as ChatEvent;
           if (e.t === "text") {
             text += e.v;
-            if (!current) current = demoActions.chatAdd({ from: "claude", text })[0];
-            else demoActions.chatSetText(current, text);
+            // Wait for real words: a reply that starts with line breaks would show as an empty bubble.
+            if (!current && text.trim())
+              current = demoActions.chatAdd({
+                from: "claude",
+                text: text.trimStart(),
+              })[0];
+            else if (current)
+              demoActions.chatSetText(current, text.trimStart());
           } else if (e.t === "progress") {
             current = null;
             text = "";
@@ -414,7 +554,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
         }
       }
     } catch {
-      say("Couldn't reach Claude. Check that the site is running and try again.");
+      say(
+        "Couldn't reach Claude. Check that the site is running and try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -436,7 +578,10 @@ export function ChatDemo({ data }: { data: ChatData }) {
         return id && card({ type: "interview", jobId: id });
       case "prepare_posting": {
         const p = e.postingId ? knownPostings().get(e.postingId) : undefined;
-        return p && startTailor(p, false);
+        if (p) return startTailor(p, false);
+        return say(
+          "I couldn't find that posting in this browser, so nothing was started. Press Apply on it in your search results or dashboard instead.",
+        );
       }
       case "update_status":
         if (id && e.status) demoActions.decide(id, e.status);
@@ -450,8 +595,12 @@ export function ChatDemo({ data }: { data: ChatData }) {
       say(`${message} You can upload another PDF or use the sample CV.`);
       demoActions.chatUpdateCard(uploadItemId, { done: false });
     };
-    if (file.type !== "application/pdf") return reopen("I can read PDFs here, and that file isn't one.");
-    const progress = demoActions.chatAdd({ from: "claude", text: "Reading your CV now. This usually takes under a minute." })[0];
+    if (file.type !== "application/pdf")
+      return reopen("I can read PDFs here, and that file isn't one.");
+    const progress = demoActions.chatAdd({
+      from: "claude",
+      text: "Reading your CV now. This usually takes under a minute.",
+    })[0];
     setBusy(true);
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -463,14 +612,25 @@ export function ChatDemo({ data }: { data: ChatData }) {
       const res = await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mediaType: file.type, data: dataUrl.slice(dataUrl.indexOf(",") + 1) }),
+        body: JSON.stringify({
+          mediaType: file.type,
+          data: dataUrl.slice(dataUrl.indexOf(",") + 1),
+        }),
       });
-      const out = (await res.json()) as { profile?: ExtractedProfile; message?: string };
-      if (!res.ok || !out.profile) return reopen(out.message ?? "I couldn't read that CV.");
+      const out = (await res.json()) as {
+        profile?: ExtractedProfile;
+        message?: string;
+      };
+      if (!res.ok || !out.profile)
+        return reopen(out.message ?? "I couldn't read that CV.");
       const p = out.profile;
       demoActions.chatSet({ ownCv: true });
       void saveFile("profile.json", JSON.stringify(p, null, 2));
-      const split = (v: string) => v.split(/,|;| and /).map((x) => x.trim()).filter(Boolean);
+      const split = (v: string) =>
+        v
+          .split(/,|;| and /)
+          .map((x) => x.trim())
+          .filter(Boolean);
       demoActions.setProfile({
         name: p.name,
         headline: p.headline,
@@ -485,13 +645,20 @@ export function ChatDemo({ data }: { data: ChatData }) {
         education: p.education.map((e, i) => ({ ...e, id: `edu-${i}` })),
         skills: p.skills,
       });
-      demoActions.chatSetText(progress, `Done. I read your CV${p.name ? `, ${p.name.split(" ")[0]}` : ""}.`);
+      demoActions.chatSetText(
+        progress,
+        `Done. I read your CV${p.name ? `, ${p.name.split(" ")[0]}` : ""}.`,
+      );
       card({
         type: "guesses",
         roles: p.guesses.roles.value,
         cities: p.guesses.cities.value,
         salary: p.guesses.salary.value,
-        reasons: { roles: p.guesses.roles.reason, cities: p.guesses.cities.reason, salary: p.guesses.salary.reason },
+        reasons: {
+          roles: p.guesses.roles.reason,
+          cities: p.guesses.cities.reason,
+          salary: p.guesses.salary.reason,
+        },
       });
     } catch {
       reopen("Something went wrong while reading your CV.");
@@ -505,7 +672,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
   function findJob(text: string) {
     const t = text.toLowerCase();
     return data.jobs.find(
-      (j) => t.includes(j.company.split(" ")[0].toLowerCase()) || t.includes(j.title.toLowerCase()),
+      (j) =>
+        t.includes(j.company.split(" ")[0].toLowerCase()) ||
+        t.includes(j.title.toLowerCase()),
     )?.id;
   }
 
@@ -596,11 +765,15 @@ export function ChatDemo({ data }: { data: ChatData }) {
             live={!!live?.on}
             onDone={(files, uploads) => {
               demoActions.chatUpdateCard(item.id, { files, done: true });
-              const added = Object.entries(files).filter(([, v]) => v !== "skipped");
+              const added = Object.entries(files).filter(
+                ([, v]) => v !== "skipped",
+              );
               you(`Uploaded ${added.map(([k]) => k).join(", ")}`);
               demoActions.markCvUploaded();
               // Keep the originals in this browser's private storage.
-              Object.values(uploads).forEach((f) => void saveFile(`uploads/${f.name}`, f));
+              Object.values(uploads).forEach(
+                (f) => void saveFile(`uploads/${f.name}`, f),
+              );
               if (live?.on && uploads.CV) void readCv(item.id, uploads.CV);
               else card({ type: "guesses" });
             }}
@@ -627,9 +800,14 @@ export function ChatDemo({ data }: { data: ChatData }) {
               demoActions.chatSet({ blockerPref: pref });
               you(label);
               if (live?.on) {
-                void askClaude("Setup is done. Please run my first job search.", false);
+                void askClaude(
+                  "Setup is done. Please run my first job search.",
+                  false,
+                );
               } else {
-                say("Got it. You can change this anytime in Settings. Starting your first search now.");
+                say(
+                  "Got it. You can change this anytime in Settings. Starting your first search now.",
+                );
                 runSearch();
               }
             }}
@@ -645,7 +823,11 @@ export function ChatDemo({ data }: { data: ChatData }) {
             onApplyLive={live?.on ? (p) => startTailor(p) : undefined}
             onAskLive={
               live?.on
-                ? (p) => !busy && void askClaude(`Tell me more about ${p.title} at ${p.company || "this employer"}. Is it a good fit for me?`)
+                ? (p) =>
+                    !busy &&
+                    void askClaude(
+                      `Tell me more about ${p.title} at ${p.company || "this employer"}. Is it a good fit for me?`,
+                    )
                 : undefined
             }
           />
@@ -654,7 +836,12 @@ export function ChatDemo({ data }: { data: ChatData }) {
         return <TailorCard card={c} itemId={item.id} />;
       case "picker":
         return (
-          <PickerCard card={c} data={data} jobIds={pickerJobs[c.purpose]()} onPick={(id) => pick(item.id, c.purpose, id)} />
+          <PickerCard
+            card={c}
+            data={data}
+            jobIds={pickerJobs[c.purpose]()}
+            onPick={(id) => pick(item.id, c.purpose, id)}
+          />
         );
       case "apply":
         return <ApplyCard card={c} data={data} itemId={item.id} />;
@@ -665,7 +852,9 @@ export function ChatDemo({ data }: { data: ChatData }) {
           <CheckInCard
             card={c}
             data={data}
-            onAnswer={(status, label) => checkInAnswer(item.id, c.jobId, status, label)}
+            onAnswer={(status, label) =>
+              checkInAnswer(item.id, c.jobId, status, label)
+            }
           />
         );
       case "followUpEmail":
@@ -690,13 +879,19 @@ export function ChatDemo({ data }: { data: ChatData }) {
             ) : live.on ? (
               <>
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-sage-soft px-2 py-0.5 text-sage">
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sage" /> Connected to Claude
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 rounded-full bg-sage"
+                  />{" "}
+                  Connected to Claude
                 </span>
                 Typed messages go to Claude; buttons and cards work as before.
               </>
             ) : (
               <>
-                <span className="rounded-md bg-surface-2 px-2 py-0.5">Scripted demo</span>
+                <span className="rounded-md bg-surface-2 px-2 py-0.5">
+                  Scripted demo
+                </span>
                 {live.reason}
               </>
             )}
@@ -719,32 +914,60 @@ export function ChatDemo({ data }: { data: ChatData }) {
         )}
       </div>
 
+      {stale && (
+        <p
+          role="status"
+          className="mb-4 border-l-2 border-sand-ink/40 bg-sand px-4 py-2.5 text-[15px] text-sand-ink"
+        >
+          The site was updated after this page opened.{" "}
+          <button
+            type="button"
+            className="underline underline-offset-4"
+            onClick={() => location.reload()}
+          >
+            Reload the page
+          </button>{" "}
+          so everything works. Your chat and files are kept.
+        </p>
+      )}
+
       <ol className="flex-1 space-y-5" aria-live="polite">
-        {chat.items.map((item) =>
-          item.from === "you" ? (
-            <li key={item.id} className="settle flex justify-end">
-              <p className="max-w-[80%] bg-sage px-4 py-2.5 text-sage-ink">{item.text}</p>
-            </li>
-          ) : (
-            <li key={item.id} className="settle flex gap-3">
-              <span aria-hidden className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-mist text-[13px] font-semibold text-mist-ink">
-                C
-              </span>
-              <div className="min-w-0 flex-1 border border-line bg-surface px-4 py-3.5 sm:px-5">
-                <span className="sr-only">Claude: </span>
-                {item.text && (
-                  <div className={item.card ? "mb-3" : ""}>
-                    <RichText text={item.text} />
-                  </div>
-                )}
-                {item.card && renderCard(item)}
-              </div>
-            </li>
-          ),
-        )}
+        {chat.items
+          // Old blank replies (line breaks before an action) would show as empty boxes.
+          .filter((item) => item.card || item.text?.trim())
+          .map((item) =>
+            item.from === "you" ? (
+              <li key={item.id} className="settle flex justify-end">
+                <p className="max-w-[80%] bg-sage px-4 py-2.5 text-sage-ink">
+                  {item.text}
+                </p>
+              </li>
+            ) : (
+              <li key={item.id} className="settle flex gap-3">
+                <span
+                  aria-hidden
+                  className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-mist text-[13px] font-semibold text-mist-ink"
+                >
+                  C
+                </span>
+                <div className="min-w-0 flex-1 border border-line bg-surface px-4 py-3.5 sm:px-5">
+                  <span className="sr-only">Claude: </span>
+                  {item.text && (
+                    <div className={item.card ? "mb-3" : ""}>
+                      <RichText text={item.text} />
+                    </div>
+                  )}
+                  {item.card && renderCard(item)}
+                </div>
+              </li>
+            ),
+          )}
         {busy && (
           <li className="flex items-center gap-2 pl-10 text-[14px] text-muted">
-            <span aria-hidden className="breathe-circle h-3.5 w-3.5 rounded-full bg-mist" />
+            <span
+              aria-hidden
+              className="breathe-circle h-3.5 w-3.5 rounded-full bg-mist"
+            />
             Claude is thinking…
           </li>
         )}
@@ -788,10 +1011,18 @@ export function ChatDemo({ data }: { data: ChatData }) {
                 route(draft);
               }
             }}
-            placeholder={onboarded ? "Ask anything, or try “apply to Maplewood”…" : "Finish setting up your profile above to start chatting."}
+            placeholder={
+              onboarded
+                ? "Ask anything, or try “apply to Maplewood”…"
+                : "Finish setting up your profile above to start chatting."
+            }
             className="min-w-0 flex-1 resize-none rounded-md border border-line bg-surface px-3.5 py-2.5 focus:border-sage focus:outline-none disabled:opacity-60"
           />
-          <button type="submit" className={`${btnPrimary} py-2.5`} disabled={!onboarded || !draft.trim() || busy}>
+          <button
+            type="submit"
+            className={`${btnPrimary} py-2.5`}
+            disabled={!onboarded || !draft.trim() || busy}
+          >
             Send
           </button>
         </form>

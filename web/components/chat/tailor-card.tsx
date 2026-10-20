@@ -5,6 +5,7 @@ import type { TailoredApplication, TailorResponse } from "@/app/api/tailor/route
 import { demoActions, getDemoState, useDemoState, type ChatCard } from "@/lib/state/demo-store";
 import { saveFile } from "@/lib/state/local-files";
 import { Box, btnGhost, btnPrimary, btnQuiet, CopyButton } from "./chat-cards";
+import { CvPreview, plainText, printDocument } from "./cv-document";
 
 // Application prepared live for one real posting: fit check, tailored CV, cover letter and
 // answers to common form questions. The person reviews, edits and submits on the employer's site.
@@ -14,13 +15,14 @@ const steps = ["Reading the full posting", "Checking how well you fit", "Writing
 // Requests in flight, so a re-render (or React's double effects in development) never sends twice.
 const inFlight = new Set<string>();
 
-export function cvToText(cv: TailoredApplication["cv"], name: string, fr: boolean) {
+export function cvToText(cv: TailoredApplication["cv"], name: string, fr: boolean, contact = "") {
   const h = fr
     ? { profile: "Profil", skills: "Compétences", exp: "Expérience", edu: "Formation", lang: "Langues" }
     : { profile: "Profile", skills: "Skills", exp: "Experience", edu: "Education", lang: "Languages" };
   return [
     `# ${name}`,
     cv.headline,
+    ...(contact ? [contact] : []),
     "",
     `## ${h.profile}`,
     cv.summary,
@@ -80,9 +82,9 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
         const out = (await res.json()) as Partial<TailorResponse> & { message?: string };
         if (!res.ok || !out.result) throw new Error(out.message ?? "I couldn't prepare this one.");
         const result = out as TailorResponse;
-        const name = getDemoState().profile?.name ?? "";
+        const me = getDemoState().profile;
         const fr = result.result.language === "fr";
-        const cvText = cvToText(result.result.cv, name, fr);
+        const cvText = cvToText(result.result.cv, me?.name ?? "", fr, contactLine(me));
         const letterText = result.result.cover_letter;
         demoActions.chatUpdateCard(itemId, { result, cvText, letterText });
         const dir = `generated/${p.id}`;
@@ -146,7 +148,7 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
   const r = card.result.result;
   const name = profile?.name ?? "";
   const base = slug(`${p.company} ${p.title}`);
-  const cvText = card.cvText ?? cvToText(r.cv, name, r.language === "fr");
+  const cvText = card.cvText ?? cvToText(r.cv, name, r.language === "fr", contactLine(profile));
   const letterText = card.letterText ?? r.cover_letter;
   const answers = r.questions.map((q) => `${q.question}\n${q.answer}`).join("\n\n");
   const openUrl = card.result.applyUrl ?? p.url;
@@ -194,10 +196,13 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
       </Box>
 
       <Editable
+        kind="cv"
+        lang={r.language}
+        title={`CV - ${name} - ${p.company || p.title}`}
         label={r.language === "fr" ? "Your tailored CV (CV adapté)" : "Your tailored CV"}
         value={cvText}
         rows={18}
-        file={`cv-${base}.md`}
+        file={`cv-${base}.txt`}
         onSave={(v) => {
           demoActions.chatUpdateCard(itemId, { cvText: v });
           void saveFile(`generated/${p.id}/cv.md`, v);
@@ -215,6 +220,9 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
       )}
 
       <Editable
+        kind="letter"
+        lang={r.language}
+        title={`${r.language === "fr" ? "Lettre" : "Cover letter"} - ${name} - ${p.company || p.title}`}
         label={r.language === "fr" ? "Cover letter (lettre de présentation)" : "Cover letter"}
         value={letterText}
         rows={14}
@@ -275,12 +283,18 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
 }
 
 function Editable({
+  kind,
+  lang,
+  title,
   label,
   value,
   rows,
   file,
   onSave,
 }: {
+  kind: "cv" | "letter";
+  lang: string;
+  title: string;
   label: string;
   value: string;
   rows: number;
@@ -288,26 +302,66 @@ function Editable({
   onSave: (v: string) => void;
 }) {
   const [text, setText] = useState(value);
+  const [editing, setEditing] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const dirty = text !== value;
   return (
     <div>
-      <label className="mb-1 block font-medium">
-        {label}
+      <p className="mb-1 font-medium">{label}</p>
+      {editing ? (
         <textarea
-          className="mt-1 block w-full border border-line bg-surface p-3 font-sans text-[14px] font-normal leading-relaxed"
+          aria-label={`Edit ${label}`}
+          className="block w-full border border-line bg-surface p-3 font-sans text-[14px] leading-relaxed"
           rows={rows}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={() => dirty && onSave(text)}
         />
-      </label>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <CopyButton text={text} />
-        <button type="button" className={btnGhost} onClick={() => download(file, text)}>
-          Download
+      ) : kind === "cv" ? (
+        <CvPreview text={text} />
+      ) : (
+        <div className="space-y-3 border border-line bg-white px-6 py-6 text-[14px] leading-relaxed text-[#1f2933] sm:px-10">
+          {text.split(/\n{2,}/).map((para, i) => (
+            <p key={i} className="whitespace-pre-wrap">
+              {para.trim()}
+            </p>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={btnPrimary}
+          onClick={() => setBlocked(!printDocument(title, kind, text, lang))}
+        >
+          Download PDF
         </button>
-        {dirty && <span className="self-center text-[13px] text-muted">Edits save when you click away.</span>}
+        <button
+          type="button"
+          className={btnQuiet}
+          onClick={() => {
+            if (editing && dirty) onSave(text);
+            setEditing(!editing);
+          }}
+        >
+          {editing ? "Done editing" : "Edit"}
+        </button>
+        <CopyButton text={plainText(text)} />
+        <button type="button" className={btnGhost} onClick={() => download(file, plainText(text))}>
+          Download text
+        </button>
+        {editing && kind === "cv" && (
+          <span className="text-[13px] text-muted"># is your name, ## a section, ### a role, - a bullet point.</span>
+        )}
+        {blocked && <span className="text-[13px] text-clay">Your browser blocked the print window. Allow pop-ups for this site and try again.</span>}
       </div>
+      {!editing && (
+        <p className="mt-1 text-[12px] text-muted">Download PDF opens a print view: choose &ldquo;Save as PDF&rdquo; as the printer.</p>
+      )}
     </div>
   );
+}
+
+function contactLine(p: { email?: string; location?: string } | null | undefined) {
+  return [p?.location, p?.email].filter(Boolean).join(" · ");
 }

@@ -478,7 +478,13 @@ export async function POST(request: Request) {
     },
   });
 
-  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" } });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson",
+      "Cache-Control": "no-store",
+      "X-Build-Stamp": process.env.NEXT_PUBLIC_BUILD_STAMP ?? "",
+    },
+  });
 }
 
 /** Lets the chat page show whether live Claude is available, without spending tokens. */
@@ -489,5 +495,5 @@ export async function GET() {
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
     return Response.json({ live: false, reason: "Add ANTHROPIC_API_KEY to web/.env.local and restart the server." });
   }
-  return Response.json({ live: true });
+  return Response.json({ live: true, build: process.env.NEXT_PUBLIC_BUILD_STAMP });
 }
