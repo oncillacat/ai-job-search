@@ -5,7 +5,8 @@ import type { TailoredApplication, TailorResponse } from "@/app/api/tailor/route
 import { demoActions, getDemoState, useDemoState, type ChatCard } from "@/lib/state/demo-store";
 import { saveFile } from "@/lib/state/local-files";
 import { Box, btnGhost, btnPrimary, btnQuiet, CopyButton } from "./chat-cards";
-import { CvPreview, plainText, printDocument } from "./cv-document";
+import { CvPreview, plainText } from "./cv-document";
+import { downloadPdf } from "./pdf-export";
 
 // Application prepared live for one real posting: fit check, tailored CV, cover letter and
 // nothing else: form questions are answered only when the person pastes the real ones into the chat.
@@ -196,7 +197,7 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
 
       <Editable
         kind="cv"
-        lang={r.language}
+        sender={{ name, contact: contactLine(profile) }}
         title={`CV - ${name} - ${p.company || p.title}`}
         label={r.language === "fr" ? "Your tailored CV (CV adapté)" : "Your tailored CV"}
         value={cvText}
@@ -220,7 +221,7 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
 
       <Editable
         kind="letter"
-        lang={r.language}
+        sender={{ name, contact: contactLine(profile) }}
         title={`${r.language === "fr" ? "Lettre" : "Cover letter"} - ${name} - ${p.company || p.title}`}
         label={r.language === "fr" ? "Cover letter (lettre de présentation)" : "Cover letter"}
         value={letterText}
@@ -272,7 +273,7 @@ export function TailorCard({ card, itemId }: { card: Extract<ChatCard, { type: "
 
 function Editable({
   kind,
-  lang,
+  sender,
   title,
   label,
   value,
@@ -281,7 +282,7 @@ function Editable({
   onSave,
 }: {
   kind: "cv" | "letter";
-  lang: string;
+  sender: { name: string; contact: string };
   title: string;
   label: string;
   value: string;
@@ -291,7 +292,7 @@ function Editable({
 }) {
   const [text, setText] = useState(value);
   const [editing, setEditing] = useState(false);
-  const [blocked, setBlocked] = useState(false);
+  const [pdfState, setPdfState] = useState<"idle" | "making" | "failed">("idle");
   const dirty = text !== value;
   return (
     <div>
@@ -320,9 +321,15 @@ function Editable({
         <button
           type="button"
           className={btnPrimary}
-          onClick={() => setBlocked(!printDocument(title, kind, text, lang))}
+          disabled={pdfState === "making"}
+          onClick={() => {
+            setPdfState("making");
+            downloadPdf(title, kind, text, sender)
+              .then(() => setPdfState("idle"))
+              .catch(() => setPdfState("failed"));
+          }}
         >
-          Download PDF
+          {pdfState === "making" ? "Making PDF…" : "Download PDF"}
         </button>
         <button
           type="button"
@@ -341,11 +348,8 @@ function Editable({
         {editing && kind === "cv" && (
           <span className="text-[13px] text-muted"># is your name, ## a section, ### a role, - a bullet point.</span>
         )}
-        {blocked && <span className="text-[13px] text-clay">Your browser blocked the print window. Allow pop-ups for this site and try again.</span>}
+        {pdfState === "failed" && <span className="text-[13px] text-clay">I couldn&apos;t make the PDF. Try again.</span>}
       </div>
-      {!editing && (
-        <p className="mt-1 text-[12px] text-muted">Download PDF opens a print view: choose &ldquo;Save as PDF&rdquo; as the printer.</p>
-      )}
     </div>
   );
 }

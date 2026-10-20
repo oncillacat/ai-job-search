@@ -1,7 +1,7 @@
 "use client";
 
 // Turns the tailored CV text (a light Markdown outline: # name, ## section, ### role, - bullet)
-// into a formatted document, on screen and as a printable page the person saves as PDF.
+// into a formatted document on screen. pdf-export.tsx turns the same outline into a PDF file.
 
 type Block =
   | { kind: "name"; text: string }
@@ -92,88 +92,6 @@ export function CvPreview({ text }: { text: string }) {
       })}
     </div>
   );
-}
-
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-const printStyles = `
-  @page { size: letter; margin: 16mm 16mm 18mm; }
-  * { box-sizing: border-box; }
-  body { font-family: "Source Sans 3", "Helvetica Neue", Arial, sans-serif; color: #1f2933; font-size: 10.5pt; line-height: 1.42; margin: 0; }
-  h1 { font-size: 20pt; margin: 0; color: #2f4556; font-weight: 600; }
-  .sub { color: #4f6f5d; margin: 2pt 0 0; }
-  h2 { font-size: 9pt; letter-spacing: .08em; text-transform: uppercase; color: #2f4556; border-bottom: 1px solid #bcd3e3; padding-bottom: 2pt; margin: 13pt 0 5pt; }
-  .role { font-weight: 600; margin: 8pt 0 0; break-after: avoid; }
-  .meta { color: #5b6b78; font-size: 9.5pt; margin: 0; break-after: avoid; }
-  ul { margin: 3pt 0 0; padding-left: 14pt; }
-  li { margin: 1.5pt 0; }
-  p { margin: 3pt 0; }
-  .letter p { margin: 0 0 9pt; white-space: pre-wrap; }
-`;
-
-function cvHtml(text: string) {
-  const blocks = parseCv(text);
-  return blocks
-    .map((b, i) => {
-      switch (b.kind) {
-        case "name":
-          return `<h1>${esc(b.text)}</h1>`;
-        case "line":
-          return blocks[i - 1]?.kind === "name" || blocks[i - 2]?.kind === "name"
-            ? `<p class="sub">${esc(b.text)}</p>`
-            : `<p>${esc(b.text)}</p>`;
-        case "section":
-          return `<h2>${esc(b.text)}</h2>`;
-        case "role":
-          return `<p class="role">${esc(b.text)}</p>`;
-        case "meta":
-          return `<p class="meta">${esc(b.text)}</p>`;
-        case "bullets":
-          return `<ul>${b.items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
-      }
-    })
-    .join("\n");
-}
-
-/** Opens a clean print view; the person chooses "Save as PDF" in the print dialog. */
-export function printDocument(title: string, kind: "cv" | "letter", text: string, lang: string) {
-  const body =
-    kind === "cv"
-      ? cvHtml(text)
-      : `<div class="letter">${text
-          .split(/\n{2,}/)
-          .map((p) => `<p>${esc(p.trim())}</p>`)
-          .join("")}</div>`;
-  // A hidden frame in this page, so no pop-up blocker gets in the way.
-  const frame = document.createElement("iframe");
-  frame.setAttribute("aria-hidden", "true");
-  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
-  document.body.appendChild(frame);
-  const doc = frame.contentDocument;
-  const w = frame.contentWindow;
-  if (!doc || !w) {
-    frame.remove();
-    return false;
-  }
-  doc.open();
-  doc.write(
-    `<!doctype html><html lang="${esc(lang)}"><head><meta charset="utf-8"><title>${esc(title)}</title>` +
-      `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&display=swap">` +
-      `<style>${printStyles}</style></head><body>${body}</body></html>`,
-  );
-  doc.close();
-  // The saved PDF is named after the page title, so borrow it while the dialog is open.
-  const pageTitle = document.title;
-  setTimeout(() => {
-    document.title = title;
-    w.focus();
-    w.print();
-    setTimeout(() => {
-      document.title = pageTitle;
-      frame.remove();
-    }, 1000);
-  }, 600);
-  return true;
 }
 
 /** Plain text for pasting into a form: the outline markers removed. */
