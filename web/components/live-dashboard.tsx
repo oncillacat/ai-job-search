@@ -7,6 +7,8 @@ import type { LiveSearch, ScoredPosting } from "@/lib/search/types";
 import { useDemoState } from "@/lib/state/demo-store";
 import { SummaryTiles } from "./applications-board";
 import { LiveTable } from "./chat/chat-cards";
+import { downloadPdf } from "./chat/pdf-export";
+import { contactLine, cvToText } from "./chat/tailor-card";
 import { Panel, RunsChart, StackedBar } from "./dashboard-charts";
 
 // The dashboard's posting sections, built from the real searches saved in this browser.
@@ -34,11 +36,47 @@ function useReal() {
   return useContext(RealMode) || !!chat.ownCv;
 }
 
-/** In real mode, a blank page until the first real search; otherwise the dashboard. */
+/** This person's own applications: saved, prepared (ready to send) and applied real postings. */
+function useOwnApplications() {
+  const { chat } = useDemoState();
+  const byId = new Map<
+    string,
+    { posting: ScoredPosting; appliedAt?: string; itemId?: string }
+  >();
+  for (const x of chat.saved ?? [])
+    byId.set(x.id, { posting: x, appliedAt: x.appliedAt });
+  for (const i of chat.items)
+    if (i.card?.type === "tailor" && i.card.result) {
+      const e = byId.get(i.card.posting.id);
+      byId.set(i.card.posting.id, {
+        posting: e?.posting ?? i.card.posting,
+        appliedAt: e?.appliedAt,
+        itemId: i.id,
+      });
+    }
+  const all = [...byId.values()];
+  return {
+    all,
+    applied: all
+      .filter((a) => a.appliedAt)
+      .sort((a, b) => b.appliedAt!.localeCompare(a.appliedAt!)),
+    ready: all.filter((a) => !a.appliedAt && a.itemId),
+    saved: all.filter((a) => !a.appliedAt && !a.itemId),
+  };
+}
+
+/** Real activity of any kind: a search, a saved posting or a prepared application. */
+function useHasActivity() {
+  const live = useLive();
+  const own = useOwnApplications();
+  return !!live || own.all.length > 0;
+}
+
+/** In real mode, a blank page until there's real activity; otherwise the dashboard. */
 export function DashboardGate({ children }: { children: ReactNode }) {
   const real = useReal();
-  const live = useLive();
-  if (!real || live) return children;
+  const active = useHasActivity();
+  if (!real || active) return children;
   return (
     <div className="border border-line bg-surface px-6 py-10 text-center sm:px-10">
       <p className="font-display text-xl">Nothing here yet.</p>
@@ -156,6 +194,34 @@ export function LiveUpdated({ children }: { children: ReactNode }) {
   );
 }
 
+function OwnTiles({ recorded, rated }: { recorded: number; rated: number }) {
+  const own = useOwnApplications();
+  const tiles = [
+    { value: own.applied.length, label: "Applied" },
+    { value: own.ready.length, label: "Ready to send" },
+    { value: own.saved.length, label: "Saved" },
+    { value: recorded, label: "Postings searched" },
+    { value: rated, label: "Read closely by Claude" },
+  ];
+  return (
+    <dl className="grid grid-cols-2 gap-px overflow-hidden border border-line bg-line sm:grid-cols-3 lg:grid-cols-5">
+      {tiles.map((t) => (
+        <div
+          key={t.label}
+          className="flex flex-col gap-0.5 bg-surface px-4 py-3.5"
+        >
+          <dd className="order-1 font-display text-3xl tabular-nums">
+            {t.value}
+          </dd>
+          <dt className="order-2 text-[13px] leading-snug text-muted">
+            {t.label}
+          </dt>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function LiveOverview({
   applications,
   children,
@@ -165,14 +231,19 @@ export function LiveOverview({
 }) {
   const live = useLive();
   const real = useReal();
+  if (real && !live) return <OwnTiles recorded={0} rated={0} />;
   if (!live) return children;
   return (
     <>
-      <SummaryTiles
-        applications={real ? [] : applications}
-        recorded={live.recorded}
-        ranked={live.rated}
-      />
+      {real ? (
+        <OwnTiles recorded={live.recorded} rated={live.rated} />
+      ) : (
+        <SummaryTiles
+          applications={applications}
+          recorded={live.recorded}
+          ranked={live.rated}
+        />
+      )}
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <Panel title="New postings per search day">
           <RunsChart runs={live.runs} />
@@ -218,7 +289,13 @@ export function LiveOverview({
 
 export function LiveRanked({ children }: { children: ReactNode }) {
   const live = useLive();
-  if (!live) return children;
+  const real = useReal();
+  if (!live)
+    return real ? (
+      <p className="text-muted">No searches in this chat yet.</p>
+    ) : (
+      children
+    );
   const ranked = [...live.rows].sort((a, b) => b.score - a.score);
   if (!ranked.length)
     return (
@@ -276,12 +353,20 @@ export function LiveRanked({ children }: { children: ReactNode }) {
 
 export function LiveTodayTitle({ children }: { children: ReactNode }) {
   const live = useLive();
-  return live ? <>Latest postings · {live.latestDay}</> : children;
+  const real = useReal();
+  return live ? (
+    <>Latest postings · {live.latestDay}</>
+  ) : real ? (
+    <>Latest postings</>
+  ) : (
+    children
+  );
 }
 
 export function LiveTodayNote({ children }: { children: ReactNode }) {
   const live = useLive();
-  if (!live) return children;
+  const real = useReal();
+  if (!live) return real ? null : children;
   const n = live.today.reduce((t, s) => t + s.searched, 0);
   const t = live.today.reduce(
     (a, s) => ({
@@ -301,7 +386,13 @@ export function LiveTodayNote({ children }: { children: ReactNode }) {
 
 export function LiveToday({ children }: { children: ReactNode }) {
   const live = useLive();
-  if (!live) return children;
+  const real = useReal();
+  if (!live)
+    return real ? (
+      <p className="text-muted">No searches in this chat yet.</p>
+    ) : (
+      children
+    );
   const rows = live.rows.filter((r) => r.foundOn === live.latestDay);
   const notices = [
     ...new Set(live.today.map((s: LiveSearch) => s.notice).filter(Boolean)),
@@ -348,24 +439,137 @@ export function SampleOnly({
   return useReal() ? empty : children;
 }
 
-/** For a person with their own CV: the real postings they saved, in place of the sample applications. */
+/** For a person with their own CV: their real applications, by status, in place of the sample ones. */
 export function OwnSaved({ children }: { children: ReactNode }) {
-  const { chat } = useDemoState();
   const real = useReal();
+  const own = useOwnApplications();
   if (!real) return children;
-  const saved = chat.saved ?? [];
-  return saved.length ? (
-    <>
-      <p className="mb-2 text-[14px] text-muted">
-        {saved.length} saved {saved.length === 1 ? "posting" : "postings"}. Open
-        one to apply on the employer&apos;s site, or ask about it in the chat.
+  if (!own.all.length) {
+    return (
+      <p className="text-muted">
+        Nothing yet. Save a posting from your search results, or press Apply on
+        one, and it will appear here.
       </p>
-      <LiveTable rows={saved} />
-    </>
-  ) : (
-    <p className="text-muted">
-      Nothing saved yet. Press Save on a posting in your search results and it
-      will appear here.
-    </p>
+    );
+  }
+  const groups = [
+    {
+      title: "Applied",
+      note: "Sent. Most replies take two to three weeks.",
+      rows: own.applied,
+    },
+    {
+      title: "Ready to send",
+      note: "Prepared and waiting for you to review and submit.",
+      rows: own.ready,
+    },
+    {
+      title: "Saved",
+      note: "Not prepared yet. Press Apply when you're ready.",
+      rows: own.saved,
+    },
+  ];
+  return (
+    <div className="space-y-6">
+      {groups.map((g) =>
+        g.rows.length ? (
+          <div key={g.title}>
+            <h3 className="font-semibold">
+              {g.title}{" "}
+              <span className="font-normal tabular-nums text-muted">
+                {g.rows.length}
+              </span>
+            </h3>
+            <p className="text-[13px] text-muted">{g.note}</p>
+            <LiveTable rows={g.rows.map((r) => r.posting)} markApplied />
+          </div>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+/** Every application prepared for a real posting, with its CV and cover letter to download. */
+export function OwnMaterials() {
+  const { chat, profile } = useDemoState();
+  const name = profile?.name ?? "";
+  const sender = { name, contact: contactLine(profile) };
+  const done = chat.items.flatMap((i) =>
+    i.card?.type === "tailor" && i.card.result
+      ? [{ itemId: i.id, card: i.card, result: i.card.result }]
+      : [],
+  );
+  if (!done.length) {
+    return (
+      <p className="text-muted">
+        No tailored documents yet. Press Apply on a posting in the chat and
+        they&apos;ll be listed here.
+      </p>
+    );
+  }
+  const applied = new Map((chat.saved ?? []).map((x) => [x.id, x.appliedAt]));
+  return (
+    <ul className="divide-y divide-line border border-line bg-surface">
+      {[...done].reverse().map(({ itemId, card, result }) => {
+        const p = card.posting;
+        const r = result.result;
+        const fr = r.language === "fr";
+        const cv = card.cvText ?? cvToText(r.cv, name, fr, sender.contact);
+        const letter = card.letterText ?? r.cover_letter;
+        const label = p.company || p.title;
+        const when = applied.get(p.id);
+        return (
+          <li
+            key={itemId}
+            className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0">
+              <p className="font-medium">
+                {p.title}
+                {p.company ? ` · ${p.company}` : ""}
+              </p>
+              <p className="text-[13px] text-muted">
+                Fit {Math.round(r.fit.score)} / 100 ·{" "}
+                {fr ? "French" : "English"}
+                {when
+                  ? ` · applied ${new Date(when).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`
+                  : " · draft, not sent yet"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="bg-sage px-3 py-1.5 text-[14px] font-medium text-sage-ink hover:opacity-90"
+                onClick={() =>
+                  void downloadPdf(`CV - ${name} - ${label}`, "cv", cv, sender)
+                }
+              >
+                CV (PDF)
+              </button>
+              <button
+                type="button"
+                className="bg-surface-2 px-3 py-1.5 text-[14px] text-ink hover:bg-line"
+                onClick={() =>
+                  void downloadPdf(
+                    `${fr ? "Lettre" : "Cover letter"} - ${name} - ${label}`,
+                    "letter",
+                    letter,
+                    sender,
+                  )
+                }
+              >
+                Cover letter (PDF)
+              </button>
+              <Link
+                href={`/chat#item-${itemId}`}
+                className="px-3 py-1.5 text-[14px] text-muted hover:bg-surface-2 hover:text-ink"
+              >
+                Open in chat
+              </Link>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

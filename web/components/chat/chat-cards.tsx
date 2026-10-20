@@ -410,14 +410,22 @@ export function LiveTable({
   rows,
   onAsk,
   onApply,
+  markApplied,
 }: {
   rows: ScoredPosting[];
   onAsk?: (p: ScoredPosting) => void;
   /** Prepare an application in the chat; without it, Apply links to the chat */
   onApply?: (p: ScoredPosting) => void;
+  /** Offer "Mark as applied" (on the dashboard) */
+  markApplied?: boolean;
 }) {
   const { chat } = useDemoState();
   const saved = new Set((chat.saved ?? []).map((x) => x.id));
+  const appliedAt = new Map((chat.saved ?? []).flatMap((x) => (x.appliedAt ? [[x.id, x.appliedAt] as const] : [])));
+  // Postings already prepared: open that card instead of preparing again.
+  const prepared = new Map(
+    chat.items.flatMap((i) => (i.card?.type === "tailor" && i.card.result ? [[i.card.posting.id, i.id] as const] : [])),
+  );
   return (
     <div className="mt-3 overflow-x-auto border border-line bg-surface">
       <table className="w-full min-w-[900px] border-collapse text-[14px]">
@@ -464,7 +472,15 @@ export function LiveTable({
               </td>
               <td className="whitespace-nowrap px-3 py-2.5">
                 <span className="flex gap-1">
-                  {onApply ? (
+                  {appliedAt.has(r.id) ? (
+                    <span className="self-center whitespace-nowrap px-2 font-medium text-sage">
+                      ✓ Applied {new Date(appliedAt.get(r.id)!).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}
+                    </span>
+                  ) : prepared.has(r.id) ? (
+                    <Link href={`/chat#item-${prepared.get(r.id)}`} className={btnPrimary}>
+                      Review
+                    </Link>
+                  ) : onApply ? (
                     <button type="button" className={btnPrimary} onClick={() => onApply(r)}>
                       Apply
                     </button>
@@ -473,12 +489,17 @@ export function LiveTable({
                       Apply
                     </Link>
                   )}
+                  {markApplied && !appliedAt.has(r.id) && (
+                    <button type="button" className={btnQuiet} onClick={() => demoActions.markPostingApplied(r)}>
+                      Mark as applied
+                    </button>
+                  )}
                   {onAsk && (
                     <button type="button" className={btnQuiet} onClick={() => onAsk(r)}>
                       Ask
                     </button>
                   )}
-                  {saved.has(r.id) ? (
+                  {appliedAt.has(r.id) ? null : saved.has(r.id) ? (
                     <button type="button" className={btnGhost} onClick={() => demoActions.unsavePosting(r.id)}>
                       Saved ✓
                     </button>

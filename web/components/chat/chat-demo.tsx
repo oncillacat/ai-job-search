@@ -744,7 +744,18 @@ export function ChatDemo({ data }: { data: ChatData }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Opened from a link to one card (the dashboard's "Open in chat"): show that card, once.
+  const linked = useRef<string | null>(typeof window === "undefined" ? null : window.location.hash.slice(1) || null);
+
   useEffect(() => {
+    if (linked.current) {
+      const el = document.getElementById(linked.current);
+      if (el) {
+        el.scrollIntoView({ block: "start" });
+        linked.current = null;
+        return;
+      }
+    }
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [chat.items.length]);
 
@@ -948,7 +959,7 @@ export function ChatDemo({ data }: { data: ChatData }) {
                 </p>
               </li>
             ) : (
-              <li key={item.id} className="settle flex gap-3">
+              <li key={item.id} id={`item-${item.id}`} className="settle flex scroll-mt-20 gap-3">
                 <span
                   aria-hidden
                   className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-mist text-[13px] font-semibold text-mist-ink"

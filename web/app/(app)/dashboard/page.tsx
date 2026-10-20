@@ -16,6 +16,7 @@ import {
   LiveTodayNote,
   LiveTodayTitle,
   DashboardGate,
+  OwnMaterials,
   OwnSaved,
   RealHeader,
   RealModeProvider,
@@ -284,9 +285,7 @@ export default async function JobBoardPage() {
               title="Materials"
               note="Tailored documents and company notes, linked to their jobs."
             >
-              <SampleOnly
-                empty={<p className="text-muted">No tailored documents yet.</p>}
-              >
+              <SampleOnly empty={<OwnMaterials />}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Panel title="CVs and cover letters">
                     <MaterialList

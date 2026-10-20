@@ -354,6 +354,6 @@ function Editable({
   );
 }
 
-function contactLine(p: { email?: string; location?: string } | null | undefined) {
+export function contactLine(p: { email?: string; location?: string } | null | undefined) {
   return [p?.location, p?.email].filter(Boolean).join(" · ");
 }
